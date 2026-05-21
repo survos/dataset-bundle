@@ -1,0 +1,323 @@
+# Canonical incoming field map
+# Maps source-specific fields to normalized DC terms.
+#
+# Structure per field:
+#   dc_term:      The target Dublin Core / schema.org term (authoritative)
+#   label:        Human-readable label for UI / AI prompts
+#   type:         text | date | array | select | uri | numeric | geo
+#   ai_extract:   true = ask AI to extract this if missing
+#   ai_priority:  high / medium / low — how important for AI to fill
+#   sources:      per-aggregator source field name(s)
+#
+# AI prompt hint: when ai_extract=true and value is null/empty, include
+# this field in the extraction prompt with its label and dc_term.
+
+fields:
+
+  title:
+    dc_term:     dcterms:title
+    label:       Title
+    type:        text
+    ai_extract:  true
+    ai_priority: high
+    sources:
+      dc:    title_info_primary_tsi
+      pp:    object_name
+      euro:  title
+      mds:   title
+      smith: title
+
+  description:
+    dc_term:     dcterms:description
+    label:       Description
+    type:        text
+    ai_extract:  true
+    ai_priority: high
+    sources:
+      dc:    abstract_tsi
+      pp:    description
+      euro:  description
+      mds:   description
+      smith: content
+
+  date:
+    dc_term:     dcterms:date
+    label:       Date
+    type:        date
+    ai_extract:  true
+    ai_priority: high
+    sources:
+      dc:    date_tsim              # array, take first
+      pp:    date
+      euro:  year
+      mds:   date
+      smith: date
+
+  date_start:
+    dc_term:     schema:startDate
+    label:       Date (start)
+    type:        date
+    ai_extract:  false
+    sources:
+      dc:    date_start_dtsi
+      euro:  ~
+      mds:   ~
+
+  date_end:
+    dc_term:     schema:endDate
+    label:       Date (end)
+    type:        date
+    ai_extract:  false
+    sources:
+      dc:    date_end_dtsi
+
+  creator:
+    dc_term:     dcterms:creator
+    label:       Creator / Author / Photographer
+    type:        array
+    ai_extract:  true
+    ai_priority: medium
+    sources:
+      dc:    name_facet_ssim        # people facet
+      pp:    ~                      # not in PP detail records
+      euro:  creator
+      mds:   creator
+      smith: content                # varies
+
+  subject:
+    dc_term:     dcterms:subject
+    label:       Subject / Keywords
+    type:        array
+    ai_extract:  true
+    ai_priority: high
+    sources:
+      dc:    subject_topic_tsim
+      pp:    ~                      # not in PP — AI must extract from description
+      euro:  subject
+      mds:   subject
+      smith: topic
+
+  subject_name:
+    dc_term:     dcterms:subject
+    label:       People (as subjects)
+    type:        array
+    ai_extract:  true
+    ai_priority: low
+    sources:
+      dc:    subject_name_tsim
+      euro:  ~
+
+  subject_geographic:
+    dc_term:     dcterms:spatial
+    label:       Geographic subject
+    type:        array
+    ai_extract:  true
+    ai_priority: medium
+    sources:
+      dc:    subject_facet_ssim     # geographic portion
+      euro:  ~
+
+  type:
+    dc_term:     dcterms:type
+    label:       Type of resource
+    type:        select
+    ai_extract:  true
+    ai_priority: high
+    # Controlled vocabulary — map source values to these
+    values:      [Text, StillImage, PhysicalObject, Sound, MovingImage, Dataset, Software, Event, Service, Collection]
+    sources:
+      dc:    type_of_resource_ssim  # "Still image", "Text", etc.
+      pp:    type                   # "webobject", "archive", "photo", "library", "people"
+      euro:  type
+      mds:   objectType
+      smith: objectType
+
+  format:
+    dc_term:     dcterms:format
+    label:       Format / Genre
+    type:        array
+    ai_extract:  true
+    ai_priority: medium
+    sources:
+      dc:    genre_specific_ssim    # e.g. "Photographic prints"
+      pp:    ~
+      euro:  format
+      mds:   format
+
+  genre:
+    dc_term:     dcterms:type
+    label:       Genre (broad)
+    type:        array
+    ai_extract:  false              # already covered by type
+    sources:
+      dc:    genre_basic_ssim       # e.g. "Photographs", "Documents"
+      euro:  ~
+
+  identifier:
+    dc_term:     dcterms:identifier
+    label:       Local identifier
+    type:        text
+    ai_extract:  false
+    sources:
+      dc:    identifier_local_other_tsim
+      pp:    id                     # UUID
+      euro:  identifier
+      mds:   id
+      smith: id
+
+  source_url:
+    dc_term:     dcterms:source
+    label:       Source URL
+    type:        uri
+    ai_extract:  false
+    sources:
+      dc:    identifier_uri_ss
+      pp:    url
+      euro:  edmIsShownAt
+      mds:   url
+      smith: url
+
+  rights:
+    dc_term:     dcterms:rights
+    label:       Rights statement
+    type:        text
+    ai_extract:  false
+    sources:
+      dc:    rights_ss
+      pp:    rights_notice
+      euro:  rights
+      mds:   licence
+      smith: rights
+
+  license:
+    dc_term:     dcterms:license
+    label:       License URI
+    type:        uri
+    ai_extract:  false
+    sources:
+      dc:    license_uri_ss
+      euro:  edmRights
+      mds:   licenceUrl
+
+  reuse_allowed:
+    dc_term:     dcterms:accessRights
+    label:       Reuse allowed
+    type:        select
+    values:      [yes, no, conditional, creative_commons, public_domain, contact_host]
+    ai_extract:  false
+    sources:
+      dc:    reuse_allowed_ssi
+      euro:  ~
+
+  language:
+    dc_term:     dcterms:language
+    label:       Language
+    type:        select
+    ai_extract:  true
+    ai_priority: low
+    sources:
+      dc:    ~                      # always English for DC
+      euro:  language
+      mds:   language
+
+  extent:
+    dc_term:     dcterms:extent
+    label:       Physical extent / dimensions
+    type:        text
+    ai_extract:  false              # AI can try from description but low value
+    sources:
+      dc:    extent_tsi
+      pp:    dimensions
+      euro:  ~
+
+  institution:
+    dc_term:     dcterms:publisher
+    label:       Holding institution
+    type:        text
+    ai_extract:  false
+    sources:
+      dc:    institution_name_ssi
+      pp:    ~                      # from inst.jsonl label
+      euro:  dataProvider
+      mds:   institution
+      smith: unitName
+
+  collection:
+    dc_term:     dcterms:isPartOf
+    label:       Collection name
+    type:        array
+    ai_extract:  false
+    sources:
+      dc:    collection_name_ssim
+      euro:  edmDatasetName
+      mds:   collection
+      smith: unitName
+
+  latitude:
+    dc_term:     schema:latitude
+    label:       Latitude
+    type:        numeric
+    ai_extract:  false
+    sources:
+      dc:    subject_coordinates_geospatial   # "42.3667,-71.3" — split
+      euro:  ~
+      mds:   ~
+
+  longitude:
+    dc_term:     schema:longitude
+    label:       Longitude
+    type:        numeric
+    ai_extract:  false
+    sources:
+      dc:    subject_coordinates_geospatial   # split from above
+      euro:  ~
+
+  thumbnail_url:
+    dc_term:     schema:thumbnailUrl
+    label:       Thumbnail URL
+    type:        uri
+    ai_extract:  false
+    # Never searchable, display only
+    sources:
+      dc:    ~                      # constructed from exemplary_image_key_base_ss
+      pp:    media[0].url
+      euro:  edmPreview
+      mds:   thumbnailUrl
+      smith: online_media[0].thumbnail
+
+  iiif_manifest:
+    dc_term:     ~
+    label:       IIIF Manifest URL
+    type:        uri
+    ai_extract:  false
+    sources:
+      dc:    identifier_iiif_manifest_ss
+      euro:  ~
+      mds:   ~
+
+# ── AI extraction config ────────────────────────────────────────────────────
+# Fields the AI should attempt to fill when missing, in priority order.
+# The prompt will only include fields where source value is null.
+
+ai_extraction:
+  prompt_preamble: >
+    You are a museum cataloguer analyzing a digitized collection item.
+    Extract the following Dublin Core metadata fields from the provided
+    text/image. Return JSON with only the fields you can confidently identify.
+    Omit fields you cannot determine. Do not fabricate information.
+
+  fields_by_priority:
+    high:   [title, description, date, type, subject]
+    medium: [creator, format, subject_geographic, subject_name]
+    low:    [language, extent]
+
+  # PP-specific: these fields are always missing and AI should prioritize them
+  aggregator_overrides:
+    pp:
+      high: [title, subject, creator, date]   # PP only has description + type
+      note: "PP description is often a condition report. Extract subject keywords from it."
+
+  # Fields that should NEVER be AI-extracted (factual, must come from source)
+  never_extract: [identifier, source_url, rights, license, reuse_allowed,
+                  thumbnail_url, iiif_manifest, latitude, longitude,
+                  institution, collection]

@@ -1,0 +1,44 @@
+{
+    "name": "survos/dataset-bundle",
+    "description": "Shared data directory conventions and path utilities for dataset-driven apps (APP_DATA_DIR).",
+    "type": "symfony-bundle",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+        "Survos\\DataBundle\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+        "Survos\\DataBundle\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": "^8.4",
+        "doctrine/dbal": "^4.2",
+        "symfony/framework-bundle": "^8.0",
+        "symfony/dependency-injection": "^8.0",
+        "symfony/config": "^8.0",
+        "symfony/serializer": "^8.0",
+        "symfony/filesystem": "^8.0",
+        "symfony/console": "^8.0",
+        "symfony/ux-twig-component": "^2.0|^3.0"
+    },
+    "require-dev": {
+        "roave/security-advisories": "dev-latest",
+        "phpunit/phpunit": "^13.0",
+        "symfony/yaml": "^8.0",
+        "survos/import-bundle": "^2.0",
+        "survos/ai-workflow-bundle": "^2.0"
+    },
+    "suggest": {
+        "survos/ai-workflow-bundle": "Wires DatasetIterateRowEvent → Subject creation for AI workflow pipelines"
+    },
+    "prefer-stable": true,
+    "minimum-stability": "beta",
+    "extra": {
+        "symfony": {
+            "require": "^8.1"
+        }
+    }
+}

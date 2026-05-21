@@ -1,0 +1,18 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Providers{% endblock %}
+
+{% block body %}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <h1 class="page-title">Providers</h1>
+    <div class="text-muted">Bundle-owned provider registry, candidates, datasets, and search indexes.</div>
+  </div>
+</div>
+
+<div class="page-body">
+  <div class="container-xl">
+    <twig:ProviderList />
+  </div>
+</div>
+{% endblock %}

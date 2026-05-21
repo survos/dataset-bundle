@@ -1,0 +1,59 @@
+<div class="providers-grid" {{ attributes }}>
+    <div class="row g-3">
+        {% for provider in providers %}
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <h4 class="card-title" style="min-width: 0;">
+                            <div class="fw-bolder text-truncate">{{ provider.label }}</div>
+                        </h4>
+                        <code class="px-2 small rounded-pill bg-dark-lt">{{ provider.code }}</code>
+                        {% if provider.homepage %}
+                            <a href="{{ provider.homepage }}" target="_blank" rel="noopener" class="ms-auto" title="Homepage">
+                                {{ ux_icon('tabler:external') }}
+                            </a>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        {% if provider.description %}
+                            <p class="card-text text-muted small">{{ provider.description }}</p>
+                        {% endif %}
+                        <div class="d-flex gap-2 flex-wrap mb-2">
+                            <span class="badge bg-primary-lt">{{ provider.datasetCount }} datasets</span>
+                            <span class="badge bg-azure-lt">{{ provider.candidateCount }} candidates</span>
+                            {% if provider.indexInfos %}
+                                {% for idx in provider.indexInfos|slice(0, 10) %}
+                                    <a href="{{ path('meili_insta', {indexName: idx.indexName}) }}" class="badge bg-success-lt text-decoration-none" target="_blank" title="{{ idx.label }}">
+                                        {{ idx.indexName }}: {{ idx.documentCount|number_format }}
+                                    </a>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        {% if provider.datasets|length %}
+                            {% set total = provider.datasets|length %}
+                            <ul class="list-unstyled small mb-0">
+                                {% for ds in provider.datasets|slice(0, 10) %}
+                                    <li class="text-truncate text-muted" title="{{ ds.datasetKey }}">{{ ds.label ?: ds.datasetKey }}</li>
+                                {% endfor %}
+                                {% if total > 10 %}
+                                    <li class="text-muted fst-italic">+ {{ total - 10 }} more</li>
+                                {% endif %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer">
+                        <div class="d-flex gap-2">
+                            <a href="{{ provider.showUrl }}" class="btn btn-sm btn-outline">Browse</a>
+                            <a href="{{ provider.apiUrl }}" class="btn btn-sm btn-outline" target="_blank" title="API Platform">API</a>
+                            <a href="{{ path('meili_insta', {indexName: 'md_' ~ provider.code}) }}" class="btn btn-sm btn-outline" target="_blank">Search</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="col-12">
+                <p class="text-muted">No providers found.</p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
