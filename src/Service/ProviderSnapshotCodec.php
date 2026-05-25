@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Service;
+namespace Survos\DatasetBundle\Service;
 
-use Survos\DataBundle\Dto\ProviderSnapshot;
-use Survos\DataBundle\Entity\Provider;
+use Survos\DatasetBundle\Dto\ProviderSnapshot;
+use Survos\DatasetBundle\Entity\Provider;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\SerializerInterface;
 

@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Command;
+namespace Survos\DatasetBundle\Command;
 
-use Survos\DataBundle\Meta\DatasetMetadataLoader;
-use Survos\DataBundle\Service\DataPaths;
+use Survos\DatasetBundle\Meta\DatasetMetadataLoader;
+use Survos\DatasetBundle\Service\DataPaths;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;

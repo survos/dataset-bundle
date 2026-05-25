@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Context;
+namespace Survos\DatasetBundle\Context;
 
-use Survos\DataBundle\Service\DataPaths;
+use Survos\DatasetBundle\Service\DataPaths;
 use Symfony\Component\Console\Input\InputInterface;
 
 use function getenv;

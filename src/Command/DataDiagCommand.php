@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Command;
+namespace Survos\DatasetBundle\Command;
 
-use Survos\DataBundle\Service\DataPaths;
+use Survos\DatasetBundle\Service\DataPaths;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\Option;
@@ -173,7 +173,6 @@ final class DataDiagCommand
             '05_raw' => $this->paths->stageDir($unit, '05_raw'),
             '10_extract' => $this->paths->stageDir($unit, '10_extract'),
             '20_normalize' => $this->paths->stageDir($unit, '20_normalize'),
-            '21_profile' => $this->paths->stageDir($unit, '21_profile'),
             '30_terms' => $this->paths->stageDir($unit, '30_terms'),
         ];
 

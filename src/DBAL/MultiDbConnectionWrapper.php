@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Survos\DataBundle\DBAL;
+namespace Survos\DatasetBundle\DBAL;
 
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;

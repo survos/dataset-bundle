@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Doctrine;
+namespace Survos\DatasetBundle\Doctrine;
 
 use Doctrine\DBAL\Driver;
 use Doctrine\DBAL\Driver\Connection;

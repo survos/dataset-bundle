@@ -16,7 +16,9 @@
         {% if provider.homepage %}
           <a class="btn btn-outline-secondary btn-sm" href="{{ provider.homepage }}" target="_blank" rel="noopener">Website</a>
         {% endif %}
-        <a class="btn btn-outline-primary btn-sm" href="{{ path('meili_insta', {indexName: 'md_' ~ provider.code}) }}" target="_blank">Search</a>
+        {% if route_exists('meili_insta') %}
+          <a class="btn btn-outline-primary btn-sm" href="{{ path('meili_insta', {indexName: 'md_' ~ provider.code}) }}" target="_blank">Search</a>
+        {% endif %}
       </div>
     </div>
   </div>

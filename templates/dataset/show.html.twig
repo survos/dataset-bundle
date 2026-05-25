@@ -1,0 +1,85 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Dataset: {{ dataset.datasetKey }}{% endblock %}
+
+{% block body %}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row align-items-center">
+      <div class="col">
+        <div class="text-secondary mb-1">
+          <a href="{{ path('data_bundle_provider_index') }}">Providers</a>
+          {% if provider %}
+            / <a href="{{ path('data_bundle_provider_show', {provider: provider.code}) }}">{{ provider.label ?: provider.code }}</a>
+          {% endif %}
+        </div>
+        <h1 class="page-title">{{ dataset.label ?: dataset.datasetKey }}</h1>
+        <div class="text-secondary"><code>{{ dataset.datasetKey }}</code></div>
+      </div>
+      <div class="col-auto d-flex gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="{{ path('_api_/dataset_infos/{datasetKey}_get', {datasetKey: dataset.datasetKey}) }}" target="_blank">API</a>
+        {% if route_exists('meili_insta') %}
+          <a class="btn btn-sm btn-outline-primary" href="{{ path('meili_insta', {indexName: 'md_' ~ dataset.provider}) }}" target="_blank">Search</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-body">
+  <div class="container-xl">
+    <div class="row g-3">
+      <div class="col-lg-8">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Overview</h3>
+          </div>
+          <div class="card-body">
+            {% if dataset.description %}
+              <p class="text-muted">{{ dataset.description }}</p>
+            {% endif %}
+            <dl class="row mb-0">
+              <dt class="col-sm-3">Status</dt>
+              <dd class="col-sm-9"><span class="badge bg-secondary-lt">{{ dataset.status }}</span></dd>
+              <dt class="col-sm-3">Objects</dt>
+              <dd class="col-sm-9">{{ dataset.objCount|number_format }}</dd>
+              <dt class="col-sm-3">Normalized</dt>
+              <dd class="col-sm-9">{{ dataset.normalizedCount is null ? 'unknown' : dataset.normalizedCount|number_format }}</dd>
+              <dt class="col-sm-3">Locale</dt>
+              <dd class="col-sm-9">{{ dataset.locale ?: 'unknown' }}</dd>
+              <dt class="col-sm-3">Country</dt>
+              <dd class="col-sm-9">{{ dataset.country ?: 'unknown' }}</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Artifacts</h3>
+          </div>
+          <div class="list-group list-group-flush">
+            {% for artifact in dataset.artifacts %}
+              <div class="list-group-item">
+                <div class="d-flex justify-content-between gap-2">
+                  <div>
+                    <div class="fw-semibold">{{ artifact.type }} / {{ artifact.code }}</div>
+                    {% if artifact.uri %}
+                      <code class="small text-muted">{{ artifact.uri }}</code>
+                    {% endif %}
+                  </div>
+                  <div class="text-end small text-muted">
+                    {% if artifact.rowCount %}{{ artifact.rowCount|number_format }} rows{% endif %}
+                  </div>
+                </div>
+              </div>
+            {% else %}
+              <div class="list-group-item text-muted">No artifacts registered.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

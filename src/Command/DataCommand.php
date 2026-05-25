@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Command;
+namespace Survos\DatasetBundle\Command;
 
-use Survos\DataBundle\Service\DataPaths;
+use Survos\DatasetBundle\Service\DataPaths;
 use Symfony\Contracts\Service\Attribute\Required;
 
 /**

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Command;
+namespace Survos\DatasetBundle\Command;
 
-use Survos\DataBundle\Event\DatasetIterateFinishedEvent;
-use Survos\DataBundle\Event\DatasetIterateRowEvent;
-use Survos\DataBundle\Event\DatasetIterateStartedEvent;
-use Survos\DataBundle\Service\DataPaths;
-use Survos\DataBundle\Service\DatasetPaths;
+use Survos\DatasetBundle\Event\DatasetIterateFinishedEvent;
+use Survos\DatasetBundle\Event\DatasetIterateRowEvent;
+use Survos\DatasetBundle\Event\DatasetIterateStartedEvent;
+use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DatasetBundle\Service\DatasetPaths;
 use Survos\JsonlBundle\IO\JsonlReader;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Argument;

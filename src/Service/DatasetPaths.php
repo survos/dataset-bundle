@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Service;
+namespace Survos\DatasetBundle\Service;
 
 /**
  * Dataset-scoped view over DataPaths.
@@ -25,7 +25,6 @@ final class DatasetPaths
     public string $rawDir { get => $this->stageDir('raw'); }          // 05_raw
     public string $extractDir { get => $this->stageDir('extract'); }  // 10_extract
     public string $normalizeDir { get => $this->stageDir('normalize'); } // 20_normalize
-    public string $profileDir { get => $this->stageDir('profile'); }  // 21_profile
     public string $termsDir  { get => $this->stageDir('terms'); }      // 30_terms
     public string $aiDir     { get => $this->stageDir('ai'); }         // 40_ai
     public string $enrichDir { get => $this->stageDir('enrich'); }     // 60_enrich
@@ -45,15 +44,21 @@ final class DatasetPaths
         return "{$this->normalizeDir}/" . ($filename ?? $this->paths->defaultObjectFilename);
     }
 
+    /** Profile is a sidecar to the normalize JSONL — same directory, same base name. */
     public function profileFile(string $filename = 'obj.profile.json'): string
     {
-        return "{$this->profileDir}/{$filename}";
+        return "{$this->normalizeDir}/{$filename}";
     }
 
-    /** Per-dataset extracted vocabulary terms (written during normalize, read during enrich). */
-    public function termsFile(string $filename = 'vocab.jsonl'): string
+    /**
+     * Per-dataset extracted vocabulary terms.
+     *
+     * Split by type and language: genre.en.jsonl, medium.fr.jsonl, place.de.jsonl, …
+     * Omit both args to get the terms directory itself.
+     */
+    public function termsFile(string $termType, string $lang): string
     {
-        return "{$this->termsDir}/{$filename}";
+        return "{$this->termsDir}/{$termType}.{$lang}.jsonl";
     }
 
     // ---- Stage resolver ----

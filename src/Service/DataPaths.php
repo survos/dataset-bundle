@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Service;
+namespace Survos\DatasetBundle\Service;
 
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -124,10 +124,8 @@ final class DataPaths
             'extract'    => '10_extract',
             'normalize'  => '20_normalize',
             'normalized' => '20_normalize',
-            'profile'    => '21_profile',
             'terms'      => '30_terms',
             'ai'         => '40_ai',
-            'claims'     => '40_ai',
             'enrich'     => '60_enrich',
             'enriched'   => '60_enrich',
             'enrich_profile' => '61_profile',
@@ -266,10 +264,10 @@ final class DataPaths
         return $this->stageDir($datasetKey, 'ai');
     }
 
-    /** Canonical path for a dataset's exported AI claims archive. */
+    /** Canonical path for a dataset's exported AI claims archive (lives in 40_ai/). */
     public function claimsFile(string $datasetKey, string $filename = 'claims.jsonl'): string
     {
-        return $this->stageDir($datasetKey, 'claims', create: true) . '/' . $filename;
+        return $this->stageDir($datasetKey, 'ai', create: true) . '/' . $filename;
     }
 
     /** Canonical path for the enriched (normalize + AI) JSONL and its profile. */

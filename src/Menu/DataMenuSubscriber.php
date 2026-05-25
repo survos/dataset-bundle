@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Menu;
+namespace Survos\DatasetBundle\Menu;
 
-use Survos\DataBundle\Entity\Candidate;
-use Survos\DataBundle\Entity\Artifact;
-use Survos\DataBundle\Entity\DatasetInfo;
-use Survos\DataBundle\Entity\Provider;
+use Survos\DatasetBundle\Entity\Candidate;
+use Survos\DatasetBundle\Entity\Artifact;
+use Survos\DatasetBundle\Entity\DatasetInfo;
+use Survos\DatasetBundle\Entity\Provider;
 use Survos\TablerBundle\Event\MenuEvent;
 use Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;

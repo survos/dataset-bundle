@@ -1,15 +1,15 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Service;
+namespace Survos\DatasetBundle\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Survos\DataBundle\Entity\Artifact;
-use Survos\DataBundle\Entity\DatasetInfo;
-use Survos\DataBundle\Entity\Provider;
-use Survos\DataBundle\Repository\ArtifactRepository;
-use Survos\DataBundle\Repository\DatasetInfoRepository;
-use Survos\DataBundle\Repository\ProviderRepository;
+use Survos\DatasetBundle\Entity\Artifact;
+use Survos\DatasetBundle\Entity\DatasetInfo;
+use Survos\DatasetBundle\Entity\Provider;
+use Survos\DatasetBundle\Repository\ArtifactRepository;
+use Survos\DatasetBundle\Repository\DatasetInfoRepository;
+use Survos\DatasetBundle\Repository\ProviderRepository;
 use Survos\JsonlBundle\Service\JsonlCountService;
 
 final class DatasetRegistryUpdater

@@ -10,7 +10,7 @@
                         <code class="px-2 small rounded-pill bg-dark-lt">{{ provider.code }}</code>
                         {% if provider.homepage %}
                             <a href="{{ provider.homepage }}" target="_blank" rel="noopener" class="ms-auto" title="Homepage">
-                                {{ ux_icon('tabler:external') }}
+                                {{ ux_icon('tabler:external-link') }}
                             </a>
                         {% endif %}
                     </div>
@@ -21,7 +21,7 @@
                         <div class="d-flex gap-2 flex-wrap mb-2">
                             <span class="badge bg-primary-lt">{{ provider.datasetCount }} datasets</span>
                             <span class="badge bg-azure-lt">{{ provider.candidateCount }} candidates</span>
-                            {% if provider.indexInfos %}
+                            {% if route_exists('meili_insta') and provider.indexInfos %}
                                 {% for idx in provider.indexInfos|slice(0, 10) %}
                                     <a href="{{ path('meili_insta', {indexName: idx.indexName}) }}" class="badge bg-success-lt text-decoration-none" target="_blank" title="{{ idx.label }}">
                                         {{ idx.indexName }}: {{ idx.documentCount|number_format }}
@@ -33,7 +33,13 @@
                             {% set total = provider.datasets|length %}
                             <ul class="list-unstyled small mb-0">
                                 {% for ds in provider.datasets|slice(0, 10) %}
-                                    <li class="text-truncate text-muted" title="{{ ds.datasetKey }}">{{ ds.label ?: ds.datasetKey }}</li>
+                                    {% set appDatasetParams = {provider: ds.provider, code: ds.code} %}
+                                    {% set datasetUrl = route_exists('app_dataset_detail', appDatasetParams)
+                                        ? path('app_dataset_detail', appDatasetParams)
+                                        : path('data_bundle_dataset_show', appDatasetParams) %}
+                                    <li class="text-truncate" title="{{ ds.datasetKey }}">
+                                        <a href="{{ datasetUrl }}" class="text-muted text-decoration-none">{{ ds.label ?: ds.datasetKey }}</a>
+                                    </li>
                                 {% endfor %}
                                 {% if total > 10 %}
                                     <li class="text-muted fst-italic">+ {{ total - 10 }} more</li>
@@ -45,7 +51,9 @@
                         <div class="d-flex gap-2">
                             <a href="{{ provider.showUrl }}" class="btn btn-sm btn-outline">Browse</a>
                             <a href="{{ provider.apiUrl }}" class="btn btn-sm btn-outline" target="_blank" title="API Platform">API</a>
-                            <a href="{{ path('meili_insta', {indexName: 'md_' ~ provider.code}) }}" class="btn btn-sm btn-outline" target="_blank">Search</a>
+                            {% if route_exists('meili_insta') %}
+                                <a href="{{ path('meili_insta', {indexName: 'md_' ~ provider.code}) }}" class="btn btn-sm btn-outline" target="_blank">Search</a>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

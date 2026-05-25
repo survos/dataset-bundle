@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Configuration;
+namespace Survos\DatasetBundle\Configuration;
 
 use Symfony\Component\Serializer\Annotation as Serializer;
 

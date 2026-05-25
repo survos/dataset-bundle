@@ -1,11 +1,11 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Repository;
+namespace Survos\DatasetBundle\Repository;
 
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
-use Survos\DataBundle\Entity\Candidate;
+use Survos\DatasetBundle\Entity\Candidate;
 
 /**
  * @extends ServiceEntityRepository<Candidate>

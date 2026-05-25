@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Entity;
+namespace Survos\DatasetBundle\Entity;
 
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
@@ -11,7 +11,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Survos\DataBundle\Repository\ArtifactRepository;
+use Survos\DatasetBundle\Repository\ArtifactRepository;
 use Survos\FieldBundle\Attribute\EntityMeta;
 use Symfony\Component\Serializer\Attribute\Groups;
 
@@ -33,6 +33,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
 class Artifact
 {
     public const TYPE_FOLIO = 'folio';
+    public const TYPE_FOLIO_ARCHIVE = 'folio_archive';
     public const TYPE_MEILI = 'meili';
     public const TYPE_ARCHIVE = 'archive';
     public const TYPE_JSONL = 'jsonl';

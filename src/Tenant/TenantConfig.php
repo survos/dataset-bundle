@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Tenant;
+namespace Survos\DatasetBundle\Tenant;
 
 final class TenantConfig
 {

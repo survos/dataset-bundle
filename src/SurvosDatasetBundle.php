@@ -1,35 +1,35 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle;
+namespace Survos\DatasetBundle;
 
-use Survos\DataBundle\Command\DataBrowseCommand;
-use Survos\DataBundle\Command\DataDiagCommand;
-use Survos\DataBundle\Command\DataHeadCommand;
-use Survos\DataBundle\Command\DataPathCommand;
-use Survos\DataBundle\Command\DataPurgeCommand;
-use Survos\DataBundle\Command\DatasetIterateCommand;
-use Survos\DataBundle\Command\ScanDatasetsCommand;
-use Survos\DataBundle\Event\DatasetIterateEvent;
-use Survos\DataBundle\EventListener\SubjectImportListener;
-use Survos\DataBundle\Context\DatasetContext;
-use Survos\DataBundle\Context\DatasetResolver;
-use Survos\DataBundle\Controller\ProviderController;
-use Survos\DataBundle\Doctrine\SqliteWalMiddleware;
-use Survos\DataBundle\EventListener\DatasetContextConsoleListener;
-use Survos\DataBundle\Meta\DatasetMetadataConfiguration;
-use Survos\DataBundle\Meta\DatasetMetadataEnsurer;
-use Survos\DataBundle\Meta\DatasetMetadataLoader;
-use Survos\DataBundle\Repository\ArtifactRepository;
-use Survos\DataBundle\Repository\CandidateRepository;
-use Survos\DataBundle\Repository\DatasetInfoRepository;
-use Survos\DataBundle\Repository\ProviderRepository;
-use Survos\DataBundle\Menu\DataMenuSubscriber;
-use Survos\DataBundle\Twig\Components\ProviderListComponent;
-use Survos\DataBundle\Service\DataPaths;
-use Survos\DataBundle\Service\DatasetRegistryUpdater;
-use Survos\DataBundle\Service\ProviderSnapshotCodec;
-use Survos\DataBundle\Service\SurvosDatasetPathsFactory;
+use Survos\DatasetBundle\Command\DataBrowseCommand;
+use Survos\DatasetBundle\Command\DataDiagCommand;
+use Survos\DatasetBundle\Command\DataHeadCommand;
+use Survos\DatasetBundle\Command\DataPathCommand;
+use Survos\DatasetBundle\Command\DataPurgeCommand;
+use Survos\DatasetBundle\Command\DatasetIterateCommand;
+use Survos\DatasetBundle\Command\ScanDatasetsCommand;
+use Survos\DatasetBundle\Event\DatasetIterateEvent;
+use Survos\DatasetBundle\EventListener\SubjectImportListener;
+use Survos\DatasetBundle\Context\DatasetContext;
+use Survos\DatasetBundle\Context\DatasetResolver;
+use Survos\DatasetBundle\Controller\ProviderController;
+use Survos\DatasetBundle\Doctrine\SqliteWalMiddleware;
+use Survos\DatasetBundle\EventListener\DatasetContextConsoleListener;
+use Survos\DatasetBundle\Meta\DatasetMetadataConfiguration;
+use Survos\DatasetBundle\Meta\DatasetMetadataEnsurer;
+use Survos\DatasetBundle\Meta\DatasetMetadataLoader;
+use Survos\DatasetBundle\Repository\ArtifactRepository;
+use Survos\DatasetBundle\Repository\CandidateRepository;
+use Survos\DatasetBundle\Repository\DatasetInfoRepository;
+use Survos\DatasetBundle\Repository\ProviderRepository;
+use Survos\DatasetBundle\Menu\DataMenuSubscriber;
+use Survos\DatasetBundle\Twig\Components\ProviderListComponent;
+use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DatasetBundle\Service\DatasetRegistryUpdater;
+use Survos\DatasetBundle\Service\ProviderSnapshotCodec;
+use Survos\DatasetBundle\Service\SurvosDatasetPathsFactory;
 use Survos\ImportBundle\Contract\DatasetContextInterface;
 use Survos\ImportBundle\Contract\DatasetPathsFactoryInterface;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -178,12 +178,14 @@ final class SurvosDatasetBundle extends AbstractBundle
         $services->set(ProviderListComponent::class)
             ->autowire()
             ->autoconfigure()
-            ->public();
+            ->public()
+            ->arg('$enabledProviders', $config['providers']);
 
         $services->set(ProviderController::class)
             ->autowire()
             ->autoconfigure()
-            ->public();
+            ->public()
+            ->arg('$enabledProviders', $config['providers']);
 
         if (class_exists(\Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber::class)) {
             $services->set(DataMenuSubscriber::class)
@@ -215,7 +217,7 @@ final class SurvosDatasetBundle extends AbstractBundle
                             'is_bundle' => false,
                             'type' => 'attribute',
                             'dir' => $entityDir,
-                            'prefix' => 'Survos\DataBundle\Entity',
+                            'prefix' => 'Survos\DatasetBundle\Entity',
                             'alias' => 'SurvosDataBundle',
                         ],
                     ],

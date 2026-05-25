@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\EventListener;
+namespace Survos\DatasetBundle\EventListener;
 
-use Survos\DataBundle\Context\DatasetContext;
-use Survos\DataBundle\Context\DatasetResolver;
+use Survos\DatasetBundle\Context\DatasetContext;
+use Survos\DatasetBundle\Context\DatasetResolver;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\Console\Event\ConsoleCommandEvent;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;

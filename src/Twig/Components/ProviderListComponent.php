@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Twig\Components;
+namespace Survos\DatasetBundle\Twig\Components;
 
-use Survos\DataBundle\Repository\CandidateRepository;
-use Survos\DataBundle\Repository\ProviderRepository;
+use Survos\DatasetBundle\Repository\CandidateRepository;
+use Survos\DatasetBundle\Repository\ProviderRepository;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\UX\TwigComponent\Attribute\AsTwigComponent;
@@ -21,6 +21,7 @@ final class ProviderListComponent
         private readonly ProviderRepository $providerRepository,
         private readonly CandidateRepository $candidateRepository,
         private readonly RouterInterface $router,
+        private readonly array $enabledProviders = [],
         private readonly ?MeiliService $meiliService = null,
         private readonly ?IndexInfoRepository $indexInfoRepository = null,
     ) {
@@ -28,7 +29,7 @@ final class ProviderListComponent
 
     public function mount(): void
     {
-        $providers = $this->providerRepository->findAllOrdered();
+        $providers = $this->providerRepository->findConfiguredOrdered($this->enabledProviders);
         $candidateCounts = $this->candidateRepository->countByProviderCode();
 
         $rows = [];

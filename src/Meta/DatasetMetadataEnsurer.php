@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Meta;
+namespace Survos\DatasetBundle\Meta;
 
-use Survos\DataBundle\Configuration\DatasetConfiguration;
-use Survos\DataBundle\Service\DatasetPaths;
+use Survos\DatasetBundle\Configuration\DatasetConfiguration;
+use Survos\DatasetBundle\Service\DatasetPaths;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Yaml\Yaml;
 

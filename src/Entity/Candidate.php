@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Entity;
+namespace Survos\DatasetBundle\Entity;
 
 use ApiPlatform\Doctrine\Orm\Filter\ExactFilter;
 use ApiPlatform\Doctrine\Orm\Filter\PartialSearchFilter;
@@ -13,7 +13,7 @@ use ApiPlatform\Metadata\Link;
 use ApiPlatform\Metadata\QueryParameter;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Survos\DataBundle\Repository\CandidateRepository;
+use Survos\DatasetBundle\Repository\CandidateRepository;
 use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ApiResource(

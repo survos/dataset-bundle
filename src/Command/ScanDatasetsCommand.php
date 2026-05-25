@@ -1,17 +1,17 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Command;
+namespace Survos\DatasetBundle\Command;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Survos\DataBundle\Entity\Artifact;
-use Survos\DataBundle\Entity\DatasetInfo;
-use Survos\DataBundle\Entity\Provider;
-use Survos\DataBundle\Repository\ArtifactRepository;
-use Survos\DataBundle\Repository\DatasetInfoRepository;
-use Survos\DataBundle\Repository\ProviderRepository;
-use Survos\DataBundle\Service\DatasetPaths;
-use Survos\DataBundle\Service\ProviderSnapshotCodec;
+use Survos\DatasetBundle\Entity\Artifact;
+use Survos\DatasetBundle\Entity\DatasetInfo;
+use Survos\DatasetBundle\Entity\Provider;
+use Survos\DatasetBundle\Repository\ArtifactRepository;
+use Survos\DatasetBundle\Repository\DatasetInfoRepository;
+use Survos\DatasetBundle\Repository\ProviderRepository;
+use Survos\DatasetBundle\Service\DatasetPaths;
+use Survos\DatasetBundle\Service\ProviderSnapshotCodec;
 use Survos\JsonlBundle\IO\JsonlReader;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
@@ -59,20 +59,22 @@ final class ScanDatasetsCommand extends DataCommand
         $created = $updated = $skipped = 0;
         $count   = 0;
 
-        if ($reset) {
-            $this->em->createQueryBuilder()->delete(Artifact::class, 'a')
-                ->getQuery()->execute();
-            $deleted = $this->em->createQueryBuilder()->delete(DatasetInfo::class, 'd')
-                ->getQuery()->execute();
-            $this->em->flush();
-            $io->text(sprintf('Reset: deleted %d DatasetInfo row(s).', $deleted));
-        }
-
         // ── Provider preflight: all provider dirs must have provider.json + DB row ──
         $root = $this->dataPaths->workRoot;
         $providerDirs = $this->listProviderDirs($root, $provider);
         if ($this->enabledProviders !== [] && $provider === null) {
-            $io->text(sprintf('Provider allowlist from survos_data.providers: %s', implode(', ', $this->normalizedEnabledProviders())));
+            $io->text(sprintf('Provider allowlist from survos_dataset.providers: %s', implode(', ', $this->normalizedEnabledProviders())));
+        }
+
+        if ($reset) {
+            $resetProviderCodes = $provider !== null && trim($provider) !== '' ? array_keys($providerDirs) : [];
+            [$deletedDatasets, $deletedProviders] = $this->resetRegistryCache($resetProviderCodes);
+            $io->text(sprintf(
+                'Reset: deleted %d DatasetInfo row(s) and %d Provider row(s)%s.',
+                $deletedDatasets,
+                $deletedProviders,
+                $resetProviderCodes === [] ? '' : ' for ' . implode(', ', $resetProviderCodes)
+            ));
         }
 
         if ($providerDirs === []) {
@@ -200,11 +202,12 @@ final class ScanDatasetsCommand extends DataCommand
         // ── Phase 2: Scan folio DB directory — upsert Artifact rows ──────────
         $folioPath   = rtrim($folioDir ?? ($this->dataPaths->root . '/folio'), '/');
         $folioFiles  = glob($folioPath . '/*/*.folio.sqlite') ?: [];
+        $folioArchives = glob($folioPath . '/*/*.folio.sqlite.gz') ?: [];
         $allowedProviders = $provider !== null && $provider !== ''
             ? [strtolower(trim($provider)) => true]
             : array_fill_keys($this->normalizedEnabledProviders(), true);
 
-        $io->text(sprintf('Phase 2: Found %d folio .sqlite files in %s', count($folioFiles), $folioPath));
+        $io->text(sprintf('Phase 2: Found %d folio .sqlite files and %d archives in %s', count($folioFiles), count($folioArchives), $folioPath));
 
         $folioUpdated = 0;
         foreach ($folioFiles as $dbFile) {
@@ -260,6 +263,39 @@ final class ScanDatasetsCommand extends DataCommand
             $folioUpdated++;
         }
 
+
+        foreach ($folioArchives as $archiveFile) {
+            $relative = substr($archiveFile, strlen($folioPath) + 1);
+            $datasetKey = preg_replace('/\.folio\.sqlite\.gz$/', '', $relative);
+            $folioProviderCode = explode('/', $datasetKey, 2)[0] ?? '';
+            if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
+                continue;
+            }
+
+            $info = $repo->find($datasetKey);
+            if (!$info) {
+                $info = new DatasetInfo($datasetKey);
+                $info->aggregator = $info->provider();
+                $this->em->persist($info);
+            }
+
+            $artifact = $this->artifactRepository->findOneBy([
+                'dataset' => $info,
+                'type' => Artifact::TYPE_FOLIO_ARCHIVE,
+                'code' => Artifact::CODE_DEFAULT,
+            ]) ?? new Artifact($info, Artifact::TYPE_FOLIO_ARCHIVE);
+
+            $artifact->uri = $archiveFile;
+            $artifact->sizeBytes = is_file($archiveFile) ? filesize($archiveFile) : null;
+            $artifact->updatedAt = is_file($archiveFile) ? (new \DateTimeImmutable())->setTimestamp((int) filemtime($archiveFile)) : null;
+            $artifact->discoveredAt = new \DateTimeImmutable();
+            $artifact->metadata = ['relativePath' => $relative, 'compressed' => true];
+
+            $info->addArtifact($artifact);
+            $this->em->persist($artifact);
+            $folioUpdated++;
+        }
+
         if ($folioUpdated > 0) {
             $this->em->flush();
         }
@@ -303,7 +339,8 @@ final class ScanDatasetsCommand extends DataCommand
             $io->section('Datasets with folio DB (ready to browse)');
             $rows = [];
             foreach ($withDb as $info) {
-                $artifact = $info->primaryArtifact(Artifact::TYPE_FOLIO);
+                \assert($info instanceof DatasetInfo);
+                $artifact = $info->artifact(Artifact::TYPE_FOLIO);
                 $rows[] = [
                     $info->datasetKey,
                     $info->label ?? '-',
@@ -370,6 +407,48 @@ final class ScanDatasetsCommand extends DataCommand
         ksort($providers);
 
         return array_values($providers);
+    }
+
+    /**
+     * @param list<string> $providerCodes Empty list means reset the whole app-local registry cache.
+     * @return array{0:int, 1:int}
+     */
+    private function resetRegistryCache(array $providerCodes): array
+    {
+        $providerCodes = array_values(array_filter(array_unique(array_map(
+            static fn(mixed $code): string => strtolower(trim((string) $code)),
+            $providerCodes
+        ))));
+
+        $deletedDatasets = 0;
+        $datasets = $providerCodes === []
+            ? $this->datasetRepository->findAll()
+            : array_merge(...array_map(
+                fn(string $providerCode): array => $this->datasetRepository->findBy(['aggregator' => $providerCode]),
+                $providerCodes
+            ));
+
+        foreach ($datasets as $datasetInfo) {
+                $this->em->remove($datasetInfo);
+                $deletedDatasets++;
+        }
+        $this->em->flush();
+
+        $deletedProviders = 0;
+        $providers = $providerCodes === []
+            ? $this->providerRepo->findAll()
+            : array_values(array_filter(array_map(
+                fn(string $providerCode) => $this->providerRepo->findOneByCode($providerCode),
+                $providerCodes
+            )));
+
+        foreach ($providers as $providerEntity) {
+                $this->em->remove($providerEntity);
+                $deletedProviders++;
+        }
+        $this->em->flush();
+
+        return [$deletedDatasets, $deletedProviders];
     }
 
     /** @return array<string,mixed> */

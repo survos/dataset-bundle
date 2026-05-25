@@ -2,6 +2,6 @@
 
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Event;
+namespace Survos\DatasetBundle\Event;
 
 final class DatasetIterateStartedEvent extends DatasetIterateEvent {}

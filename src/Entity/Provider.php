@@ -1,11 +1,14 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Entity;
+namespace Survos\DatasetBundle\Entity;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Survos\FieldBundle\Attribute\RouteIdentity;
+use Survos\FieldBundle\Entity\RouteIdentityTrait;
+use Survos\FieldBundle\Entity\RouteParametersInterface;
 
 /**
  * Provider entity - represents a data provider like Smithsonian, NARA, DC, etc.
@@ -14,10 +17,12 @@ use Doctrine\ORM\Mapping as ORM;
  *   data/{provider}/provider.json    ← persisted from #[Aggregator] attribute
  *   data/{provider}/{code}/         ← datasets
  */
-#[ORM\Entity(repositoryClass: \Survos\DataBundle\Repository\ProviderRepository::class)]
+#[ORM\Entity(repositoryClass: \Survos\DatasetBundle\Repository\ProviderRepository::class)]
 #[ORM\Table(name: 'provider')]
-class Provider
+#[RouteIdentity(field: 'code')]
+class Provider implements RouteParametersInterface, \Stringable
 {
+    use RouteIdentityTrait;
     #[ORM\Id]
     #[ORM\Column(length: 32)]
     private ?string $code = null;

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Dto;
+namespace Survos\DatasetBundle\Dto;
 
 /**
  * Base class for all normalized collection object DTOs.

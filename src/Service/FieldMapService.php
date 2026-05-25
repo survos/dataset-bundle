@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Service;
+namespace Survos\DatasetBundle\Service;
 
 use Symfony\Component\Yaml\Yaml;
 

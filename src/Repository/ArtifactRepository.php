@@ -1,13 +1,13 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Repository;
+namespace Survos\DatasetBundle\Repository;
 
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use Survos\FieldBundle\Repository\QueryBuilderHelperInterface;
 use Survos\FieldBundle\Repository\QueryBuilderHelperTrait;
-use Survos\DataBundle\Entity\Artifact;
+use Survos\DatasetBundle\Entity\Artifact;
 
 /**
  * @extends ServiceEntityRepository<Artifact>

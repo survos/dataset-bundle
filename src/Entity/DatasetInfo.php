@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Survos\DataBundle\Entity;
+namespace Survos\DatasetBundle\Entity;
 
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
@@ -13,8 +13,13 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Survos\DataBundle\Repository\DatasetInfoRepository;
+use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\FieldBundle\Attribute\EntityMeta;
+use Survos\FieldBundle\Attribute\Field;
+use Survos\FieldBundle\Attribute\RouteIdentity;
+use Survos\FieldBundle\Entity\RouteIdentityTrait;
+use Survos\FieldBundle\Entity\RouteParametersInterface;
+use Survos\FieldBundle\Enum\Widget;
 use Symfony\Component\Serializer\Attribute\Groups;
 
 /**
@@ -24,6 +29,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
  * Populate with: bin/console data:scan-datasets
  */
 #[EntityMeta(icon: 'mdi:database-outline', group: 'Data', label: 'Datasets')]
+#[RouteIdentity(field: 'datasetKey')]
 #[ORM\Entity(repositoryClass: DatasetInfoRepository::class)]
 #[ORM\Index(columns: ['aggregator'])]
 #[ORM\Index(columns: ['locale'])]
@@ -37,17 +43,20 @@ use Symfony\Component\Serializer\Attribute\Groups;
 )]
 #[ApiFilter(SearchFilter::class, properties: ['datasetKey' => 'partial', 'label' => 'partial', 'aggregator' => 'exact', 'status' => 'exact', 'country' => 'exact'])]
 #[ApiFilter(OrderFilter::class, properties: ['datasetKey', 'label', 'aggregator', 'status', 'objCount', 'normalizedCount', 'lastScanned'])]
-final class DatasetInfo
+final class DatasetInfo implements RouteParametersInterface, \Stringable
 {
+    use RouteIdentityTrait;
     #[ORM\Id]
     #[ORM\Column(type: Types::STRING, length: 128)]
     #[Groups(['dataset:read'])]
+    #[Field(searchable: true)]
     public readonly string $datasetKey;  // e.g. "fortepan/hu", "dc/0v83gg01j"
 
     // ── From 00_meta/dataset.yaml ─────────────────────────────────────────────
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(searchable: true)]
     public ?string $label = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
@@ -56,6 +65,7 @@ final class DatasetInfo
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(filterable: true, facet: true, searchable: true)]
     public ?string $aggregator = null;    // dc | pp | fortepan | mds | mus | etc.
 
     #[ORM\ManyToOne(targetEntity: Provider::class, inversedBy: 'datasets')]
@@ -69,10 +79,12 @@ final class DatasetInfo
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(filterable: true, facet: true)]
     public ?string $locale = null;        // default locale: en | de | hu | etc.
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(filterable: true, facet: true)]
     public ?string $country = null;       // ISO2: US | HU | GB | etc.
 
     #[ORM\Column(nullable: true)]
@@ -106,10 +118,12 @@ final class DatasetInfo
     /** One of: discovered | raw | normalized | profiled | folio | indexed */
     #[ORM\Column(length: 32)]
     #[Groups(['dataset:read'])]
+    #[Field(filterable: true, facet: true)]
     public string $status = 'discovered';
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(filterable: true, sortable: true, widget: Widget::Range)]
     public ?int $normalizedCount = null;   // from profile recordCount
 
     #[ORM\Column(nullable: true)]
@@ -179,6 +193,11 @@ final class DatasetInfo
         $this->artifacts = new ArrayCollection();
     }
 
+    public function __toString(): string
+    {
+        return $this->label ?? $this->datasetKey;
+    }
+
     // ── Derived helpers ───────────────────────────────────────────────────────
 
     public function provider(): string
@@ -203,52 +222,24 @@ final class DatasetInfo
         return $this->code();
     }
 
-    public function hasRaw(): bool        { return $this->rawPath !== null && is_file($this->rawPath); }
-    public function hasNormalized(): bool { return $this->normalizedPath !== null && is_file($this->normalizedPath); }
-    public function hasProfile(): bool    { return $this->profilePath !== null && is_file($this->profilePath); }
+    public function hasRaw(): bool        { return $this->rawPath !== null; }
+    public function hasNormalized(): bool { return $this->normalizedPath !== null; }
+    public function hasProfile(): bool    { return $this->profilePath !== null; }
 
-    public ?string $folioPath {
-        get => $this->primaryArtifact(Artifact::TYPE_FOLIO)?->uri;
-    }
-    public ?int $folioSize {
-        get => $this->primaryArtifact(Artifact::TYPE_FOLIO)?->sizeBytes;
-    }
-    public ?int $folioRowCount {
-        get => $this->primaryArtifact(Artifact::TYPE_FOLIO)?->rowCount;
-    }
-    public bool $hasFolio {
-        get {
-            $path = $this->primaryArtifact(Artifact::TYPE_FOLIO)?->uri;
-            return $path !== null && is_file($path);
-        }
-    }
-    public ?int $liveSize {
-        get {
-            $path = $this->primaryArtifact(Artifact::TYPE_FOLIO)?->uri;
-            return $path !== null && is_file($path) ? filesize($path) : null;
-        }
+    public function hasArtifact(string $type): bool
+    {
+        return $this->artifact($type) !== null;
     }
 
-    public function primaryArtifact(string $type): ?Artifact
+    public function artifact(string $type, string $code = Artifact::CODE_DEFAULT): ?Artifact
     {
         foreach ($this->artifacts as $artifact) {
-            if ($artifact->type === $type && $artifact->code === Artifact::CODE_DEFAULT) {
-                return $artifact;
-            }
-        }
-
-        foreach ($this->artifacts as $artifact) {
-            if ($artifact->type === $type) {
+            if ($artifact->type === $type && $artifact->code === $code) {
                 return $artifact;
             }
         }
 
         return null;
-    }
-
-    public function hasArtifact(string $type): bool
-    {
-        return $this->primaryArtifact($type) !== null;
     }
 
     public function addArtifact(Artifact $artifact): self

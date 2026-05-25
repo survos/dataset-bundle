@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Survos\DataBundle\EventListener;
+namespace Survos\DatasetBundle\EventListener;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Survos\AiWorkflowBundle\Entity\Subject;
 use Survos\AiWorkflowBundle\Repository\SubjectRepository;
 use Survos\AiWorkflowBundle\Task\Observation\ObserveTask;
 use Survos\AiWorkflowBundle\Workflow\SubjectFlow;
-use Survos\DataBundle\Event\DatasetIterateFinishedEvent;
-use Survos\DataBundle\Event\DatasetIterateRowEvent;
-use Survos\DataBundle\Event\DatasetIterateStartedEvent;
+use Survos\DatasetBundle\Event\DatasetIterateFinishedEvent;
+use Survos\DatasetBundle\Event\DatasetIterateRowEvent;
+use Survos\DatasetBundle\Event\DatasetIterateStartedEvent;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 
 /**
