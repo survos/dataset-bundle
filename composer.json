@@ -5,12 +5,12 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Survos\\DatasetBundle\\": "src/"
+        "Survos\\DataBundle\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Survos\\DatasetBundle\\Tests\\": "tests/"
+        "Survos\\DataBundle\\Tests\\": "tests/"
         }
     },
     "require": {
@@ -29,10 +29,7 @@
         "phpunit/phpunit": "^13.0",
         "symfony/yaml": "^8.0",
         "survos/import-bundle": "^2.0",
-        "survos/ai-workflow-bundle": "^2.0",
-        "survos/tabler-bundle": "^2.5",
-        "api-platform/core": "^4.3",
-        "survos/field-bundle": "^2.5"
+        "survos/ai-workflow-bundle": "^2.0"
     },
     "suggest": {
         "survos/ai-workflow-bundle": "Wires DatasetIterateRowEvent → Subject creation for AI workflow pipelines"

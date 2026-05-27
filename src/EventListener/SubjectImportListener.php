@@ -18,7 +18,7 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
  * Generic dataset-row → Subject importer.
  *
  * Only registered when survos/ai-workflow-bundle is installed.
- * See SurvosDataBundle::loadExtension() for the class_exists guard.
+ * See SurvosDatasetBundle::loadExtension() for the class_exists guard.
  *
  * subjectType = provider prefix  (e.g. "fortepan" from "fortepan/hu")
  * subjectId   = row['id']

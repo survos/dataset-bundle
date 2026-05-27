@@ -16,7 +16,7 @@ use Doctrine\DBAL\Driver\Middleware\AbstractDriverMiddleware;
  * busy_timeout:     wait up to 30 s before "database is locked".
  * synchronous=NORMAL: safe durability, cheaper than FULL.
  *
- * Register as a doctrine.middleware service (see SurvosDataBundle).
+ * Register as a doctrine.middleware service (see SurvosDatasetBundle).
  */
 final class SqliteWalMiddleware implements Middleware
 {

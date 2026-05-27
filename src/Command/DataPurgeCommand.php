@@ -49,9 +49,10 @@ final class DataPurgeCommand
             }
 
             if ($folios) {
-                $folio = $this->folioPath($datasetKey);
-                if (is_file($folio)) {
-                    $paths[] = $folio;
+                foreach ($this->folioPaths($datasetKey) as $folio) {
+                    if (is_file($folio)) {
+                        $paths[] = $folio;
+                    }
                 }
             }
         }
@@ -103,15 +104,11 @@ final class DataPurgeCommand
         return $targets;
     }
 
-    private function folioPath(string $datasetKey): string
+    /** @return list<string> */
+    private function folioPaths(string $datasetKey): array
     {
-        $parsed = $this->paths->parseDatasetRef($datasetKey);
-
-        return sprintf(
-            '%s/folio/%s/%s.folio.sqlite',
-            $this->paths->root,
-            $parsed['provider'],
-            $parsed['code'],
-        );
+        return [
+            $this->paths->folioFile($datasetKey),
+        ];
     }
 }

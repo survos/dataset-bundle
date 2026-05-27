@@ -152,12 +152,7 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
     #[ORM\Column(type: Types::JSON)]
     public array $cores = [];
 
-    /**
-     * Field names per core from the profile.
-     * e.g. {"obj": ["id","title","year","donor","tags","country","city","latitude"]}
-     *
-     * @var array<string, string[]>
-     */
+    /** @var array<string, string[]> */
     #[ORM\Column(type: Types::JSONB)]
     public array $fields = [];
 
@@ -186,6 +181,21 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
      */
     #[ORM\Column(type: Types::JSONB)]
     public array $meta = [];
+
+
+    /** @return array<string, int> */
+    #[Groups(['dataset:read'])]
+    public function getCoreCounts(): array
+    {
+        $counts = is_array($this->meta['coreCounts'] ?? null) ? $this->meta['coreCounts'] : [];
+
+        return array_map('intval', $counts);
+    }
+
+    #[Groups(['dataset:read'])]
+    public int $itemCount {
+        get => $this->getCoreCounts()['obj'] ?? $this->objCount;
+    }
 
     public function __construct(string $datasetKey)
     {

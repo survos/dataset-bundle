@@ -42,17 +42,13 @@ final class DataHeadCommand
 
         $datasetRef = trim($dataset);
         $stage ??= 'normalize';
-        $stageDir = $this->paths->stageDir($datasetRef, $stage);
+        $target = $this->paths->firstReadableStageFile($datasetRef, $stage, $file);
 
-        $target = $stageDir;
-        if ($file !== null && $file !== '') {
-            $target = rtrim($stageDir, '/') . '/' . ltrim($file, '/');
-        } elseif ($stage !== 'meta' && $stage !== '00_meta') {
-            $target = rtrim($stageDir, '/') . '/' . $this->paths->defaultObjectFilename;
-        }
-
-        if (!is_file($target)) {
-            $io->error(sprintf('File not found: %s', $target));
+        if ($target === null) {
+            $io->error(sprintf(
+                'File not found. Tried: %s',
+                implode(', ', $this->paths->stageFileCandidates($datasetRef, $stage, $file))
+            ));
             return Command::FAILURE;
         }
 

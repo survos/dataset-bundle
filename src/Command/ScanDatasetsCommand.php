@@ -7,6 +7,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Survos\DatasetBundle\Entity\Artifact;
 use Survos\DatasetBundle\Entity\DatasetInfo;
 use Survos\DatasetBundle\Entity\Provider;
+use Survos\FolioBundle\Entity\Folio;
+use Survos\FolioBundle\Service\FolioService;
 use Survos\DatasetBundle\Repository\ArtifactRepository;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\DatasetBundle\Repository\ProviderRepository;
@@ -41,6 +43,7 @@ final class ScanDatasetsCommand extends DataCommand
         private readonly DatasetInfoRepository $datasetRepository,
         private readonly ProviderSnapshotCodec $providerSnapshotCodec,
         private readonly array $enabledProviders = [],
+        private readonly ?FolioService $folioService = null,
     ) {}
 
     public function __invoke(
@@ -200,20 +203,20 @@ final class ScanDatasetsCommand extends DataCommand
         $this->em->flush();
 
         // ── Phase 2: Scan folio DB directory — upsert Artifact rows ──────────
-        $folioPath   = rtrim($folioDir ?? ($this->dataPaths->root . '/folio'), '/');
-        $folioFiles  = glob($folioPath . '/*/*.folio.sqlite') ?: [];
-        $folioArchives = glob($folioPath . '/*/*.folio.sqlite.gz') ?: [];
+        $folioPath   = rtrim($folioDir ?? $this->dataPaths->folioRootDir, '/');
+        $folioFiles  = glob($folioPath . '/*/*.folio') ?: [];
+        $folioArchives = glob($folioPath . '/*/*.folio.gz') ?: [];
         $allowedProviders = $provider !== null && $provider !== ''
             ? [strtolower(trim($provider)) => true]
             : array_fill_keys($this->normalizedEnabledProviders(), true);
 
-        $io->text(sprintf('Phase 2: Found %d folio .sqlite files and %d archives in %s', count($folioFiles), count($folioArchives), $folioPath));
+        $io->text(sprintf('Phase 2: Found %d folio files and %d archives in %s', count($folioFiles), count($folioArchives), $folioPath));
 
         $folioUpdated = 0;
         foreach ($folioFiles as $dbFile) {
-            // Path is provider/dataset.folio.sqlite — strip base dir and extension to get dataset key.
+            // Path is provider/dataset.folio - strip extension to get dataset key.
             $relative   = substr($dbFile, strlen($folioPath) + 1);
-            $datasetKey = preg_replace('/\.folio\.sqlite$/', '', $relative);
+            $datasetKey = substr($relative, 0, -strlen('.folio'));
             $folioProviderCode = explode('/', $datasetKey, 2)[0] ?? '';
             if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
                 continue;
@@ -238,8 +241,15 @@ final class ScanDatasetsCommand extends DataCommand
                 $info->setProviderEntity($providerEntity);
             }
 
-            $folio ??= true;
-            $summary = $folio ? $this->summarizeFolio($dbFile) : ['rowCount' => null, 'cores' => [], 'coreCounts' => [], 'dtoCounts' => null];
+            // Read label from the folio via FolioService; row counts stay core-scoped.
+            if ($this->folioService) {
+                $ctx = $this->folioService->context($datasetKey);
+                $folioEntity = $ctx->em->find(Folio::class, $datasetKey);
+                $info->label ??= $folioEntity->label;
+            }
+
+            $summary = $this->summarizeFolio($dbFile);
+            $info->objCount = (int) ($info->getCoreCounts()['obj'] ?? $summary['coreCounts']['obj'] ?? $info->objCount);
             $artifact = $this->artifactRepository->findOneBy([
                 'dataset' => $info,
                 'type' => Artifact::TYPE_FOLIO,
@@ -247,10 +257,10 @@ final class ScanDatasetsCommand extends DataCommand
             ]) ?? new Artifact($info, Artifact::TYPE_FOLIO);
 
             $artifact->uri = $dbFile;
-            $artifact->sizeBytes = is_file($dbFile) ? filesize($dbFile) : null;
+            $artifact->sizeBytes = filesize($dbFile) ?: null;
             $artifact->rowCount  = $summary['rowCount'];
             $artifact->dtoCounts = $summary['dtoCounts'];
-            $artifact->updatedAt = is_file($dbFile) ? (new \DateTimeImmutable())->setTimestamp((int) filemtime($dbFile)) : null;
+            $artifact->updatedAt = (new \DateTimeImmutable())->setTimestamp((int) filemtime($dbFile));
             $artifact->discoveredAt = new \DateTimeImmutable();
             $artifact->metadata = [
                 'relativePath' => $relative,
@@ -266,7 +276,7 @@ final class ScanDatasetsCommand extends DataCommand
 
         foreach ($folioArchives as $archiveFile) {
             $relative = substr($archiveFile, strlen($folioPath) + 1);
-            $datasetKey = preg_replace('/\.folio\.sqlite\.gz$/', '', $relative);
+            $datasetKey = substr($relative, 0, -strlen('.folio'));
             $folioProviderCode = explode('/', $datasetKey, 2)[0] ?? '';
             if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
                 continue;
@@ -492,17 +502,58 @@ final class ScanDatasetsCommand extends DataCommand
         $profFile = $paths->profileFile('obj.profile.json');
         $info->profilePath    = is_file($profFile) ? $profFile : null;
 
-        // Compile core list + field names from profile
-        if ($info->profilePath && is_file($info->profilePath)) {
-            $this->populateFromProfile($info, $info->profilePath);
+        $info->cores = [];
+        $info->fields = [];
+        $info->meta['coreCounts'] = [];
+        foreach ($this->profileFiles($paths) as $coreName => $profileFile) {
+            $this->populateFromProfile($info, $profileFile, $coreName);
         }
 
         if ($info->objCount === 0 && $info->rawPath && is_file($info->rawPath)) {
             $info->objCount = $this->countJsonlLines($info->rawPath);
+            $info->meta['coreCounts']['obj'] ??= $info->objCount;
         }
     }
 
-    private function populateFromProfile(DatasetInfo $info, string $profilePath): void
+    /**
+     * @return array<string,string> core => profile path
+     */
+    private function profileFiles(DatasetPaths $paths): array
+    {
+        $dir = $paths->normalizeDir;
+        if (!is_dir($dir)) {
+            return [];
+        }
+
+        $profiles = [];
+        foreach (new \DirectoryIterator($dir) as $file) {
+            if (!$file->isFile()) {
+                continue;
+            }
+
+            $name = $file->getFilename();
+            if (preg_match('/^([A-Za-z0-9_-]+)\.profile\.json$/', $name, $matches) !== 1) {
+                continue;
+            }
+
+            $profiles[$matches[1]] = $file->getPathname();
+        }
+
+        uksort($profiles, static function (string $left, string $right): int {
+            if ($left === 'obj') {
+                return $right === 'obj' ? 0 : -1;
+            }
+            if ($right === 'obj') {
+                return 1;
+            }
+
+            return $left <=> $right;
+        });
+
+        return $profiles;
+    }
+
+    private function populateFromProfile(DatasetInfo $info, string $profilePath, string $coreName): void
     {
         try {
             $profile = json_decode(file_get_contents($profilePath), true, 512, JSON_THROW_ON_ERROR);
@@ -510,26 +561,29 @@ final class ScanDatasetsCommand extends DataCommand
             return;
         }
 
-        $info->normalizedCount = $profile['recordCount'] ?? null;
-        if (($info->objCount ?? 0) === 0 && (int) ($info->normalizedCount ?? 0) > 0) {
-            $info->objCount = (int) $info->normalizedCount;
-        }
-
-        // Profile is for the 'obj' core by default
-        // Multi-core datasets will have multiple profile files (obj.profile.json, cat.profile.json, etc.)
-        $coreName = basename(dirname(dirname($profilePath))); // derive from path if possible
-        $coreName = 'obj'; // default — most datasets have a single 'obj' core
-
         if (!in_array($coreName, $info->cores, true)) {
             $info->cores[] = $coreName;
         }
 
+        $recordCount = (int) ($profile['recordCount'] ?? 0);
+        $info->meta['coreCounts'][$coreName] = $recordCount;
         $info->fields[$coreName] = array_keys($profile['fields'] ?? []);
-        $info->profileSummary = $this->buildProfileSummary($profile);
 
-        if ($info->normalizedCount) {
+        if ($recordCount > 0) {
             $info->lastNormalized = new \DateTimeImmutable();
         }
+
+        if ($coreName !== 'obj') {
+            return;
+        }
+
+        $info->normalizedCount = $recordCount;
+        if (($info->objCount ?? 0) === 0 && (int) ($info->normalizedCount ?? 0) > 0) {
+            $info->objCount = (int) $info->normalizedCount;
+        }
+
+        $info->profileSummary = $this->buildProfileSummary($profile);
+
     }
 
     /** @param array<string,mixed> $profile */

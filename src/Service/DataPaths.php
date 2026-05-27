@@ -141,6 +141,7 @@ final class DataPaths
     public string $artifactRootDir { get => "{$this->root}/{$this->artifactRoot}"; }
     public string $runsRootDir { get => "{$this->root}/{$this->runsRoot}"; }
     public string $cacheRootDir { get => "{$this->root}/{$this->cacheRoot}"; }
+    public string $folioRootDir { get => "{$this->root}/folio"; }
     public string $zipsRootDir {
         get => str_starts_with($this->zipsRoot, '/')
             ? rtrim($this->zipsRoot, '/')
@@ -187,6 +188,29 @@ final class DataPaths
         return $this->providerArchiveRoot($providerId) . '/' . $relativePath;
     }
 
+    public function folioFile(string $datasetKey, string $extension = 'folio', bool $create = false): string
+    {
+        $parsed = $this->parseDatasetRef($datasetKey);
+        $path = sprintf('%s/%s/%s.%s', $this->folioRootDir, $parsed['provider'], $parsed['code'], ltrim($extension, '.'));
+
+        if ($create) {
+            $this->filesystem()->mkdir(dirname($path));
+        }
+
+        return $path;
+    }
+
+    public function folioBootstrapFile(string $extension = 'folio', bool $create = false): string
+    {
+        $path = sprintf('%s/_bootstrap.%s', $this->folioRootDir, ltrim($extension, '.'));
+
+        if ($create) {
+            $this->filesystem()->mkdir(dirname($path));
+        }
+
+        return $path;
+    }
+
     /**
      * Resolve a stage directory for a dataset.
      *
@@ -216,6 +240,50 @@ final class DataPaths
         }
 
         return $path;
+    }
+
+    /**
+     * Return candidate files for a dataset stage, in preferred read order.
+     *
+     * Raw stages may be backed either by a staged file in work/<provider>/<code>/05_raw
+     * or by a provider archive at archive/<provider>/<code>.jsonl(.gz).
+     *
+     * @return list<string>
+     */
+    public function stageFileCandidates(string $datasetKey, ?string $stage = null, ?string $file = null): array
+    {
+        $stage ??= 'normalize';
+        $stageDir = $this->stageDir($datasetKey, $stage);
+
+        if ($file !== null && $file !== '') {
+            return [rtrim($stageDir, '/') . '/' . ltrim($file, '/')];
+        }
+
+        if ($stage === 'meta' || $stage === '00_meta') {
+            return [$stageDir];
+        }
+
+        $candidates = [rtrim($stageDir, '/') . '/' . $this->defaultObjectFilename];
+
+        if ($stage === 'raw' || $stage === '05_raw') {
+            $candidates[] = $candidates[0] . '.gz';
+            $parsed = $this->parseDatasetRef($datasetKey);
+            $candidates[] = $this->providerArchiveFile($parsed['provider'], $parsed['code'] . '.jsonl.gz');
+            $candidates[] = $this->providerArchiveFile($parsed['provider'], $parsed['code'] . '.jsonl');
+        }
+
+        return array_values(array_unique($candidates));
+    }
+
+    public function firstReadableStageFile(string $datasetKey, ?string $stage = null, ?string $file = null): ?string
+    {
+        foreach ($this->stageFileCandidates($datasetKey, $stage, $file) as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     public function normalizeRawFilename(string $filename): string

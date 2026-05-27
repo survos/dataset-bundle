@@ -213,12 +213,12 @@ final class SurvosDatasetBundle extends AbstractBundle
             $builder->prependExtensionConfig('doctrine', [
                 'orm' => [
                     'mappings' => [
-                        'SurvosDataBundle' => [
+                        'SurvosDatasetBundle' => [
                             'is_bundle' => false,
                             'type' => 'attribute',
                             'dir' => $entityDir,
                             'prefix' => 'Survos\DatasetBundle\Entity',
-                            'alias' => 'SurvosDataBundle',
+                            'alias' => 'SurvosDatasetBundle',
                         ],
                     ],
                 ],
@@ -236,7 +236,7 @@ final class SurvosDatasetBundle extends AbstractBundle
         if ($builder->hasExtension('twig')) {
             $builder->prependExtensionConfig('twig', [
                 'paths' => [
-                    $templateDir => 'SurvosDataBundle',
+                    $templateDir => 'SurvosDatasetBundle',
                 ],
             ]);
         }
@@ -244,8 +244,8 @@ final class SurvosDatasetBundle extends AbstractBundle
         if ($builder->hasExtension('twig_component')) {
             $builder->prependExtensionConfig('twig_component', [
                 'defaults' => [
-                    'Survos\\DataBundle\\Twig\\Components\\' => [
-                        'template_directory' => '@SurvosDataBundle/components/',
+                    'Survos\\DatasetBundle\\Twig\\Components\\' => [
+                        'template_directory' => '@SurvosDatasetBundle/components/',
                     ],
                 ],
             ]);

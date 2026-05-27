@@ -36,7 +36,7 @@ final class SurvosDatasetPathsFactory implements DatasetPathsFactoryInterface
             datasetKey: $datasetKey,
             datasetRoot: $datasetRoot,
             rawDir: $rawDir,
-            rawObjectPath: $rawDir . '/' . $objFilename,
+            rawObjectPath: $this->dataPaths->firstReadableStageFile($datasetKey, 'raw') ?? $rawDir . '/' . $objFilename,
             normalizedDir: $normalizeDir,
             normalizedObjectPath: $normalizeDir . '/' . $objFilename,
             termsDir: $termsDir,

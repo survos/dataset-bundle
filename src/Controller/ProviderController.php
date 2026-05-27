@@ -23,7 +23,7 @@ final class ProviderController extends AbstractController
     #[Route('/data/providers', name: 'data_bundle_provider_index', methods: ['GET'])]
     public function index(): Response
     {
-        return $this->render('@SurvosDataBundle/provider/index.html.twig');
+        return $this->render('@SurvosDatasetBundle/provider/index.html.twig');
     }
 
     #[Route('/data/providers/{provider}', name: 'data_bundle_provider_show', methods: ['GET'])]
@@ -43,7 +43,7 @@ final class ProviderController extends AbstractController
             throw $this->createNotFoundException(sprintf('Provider not found: %s', $providerCode));
         }
 
-        return $this->render('@SurvosDataBundle/provider/show.html.twig', [
+        return $this->render('@SurvosDatasetBundle/provider/show.html.twig', [
             'provider' => $providerEntity,
             'candidateApiUrl' => '/api/candidates',
             'datasetApiUrl' => '/api/dataset_infos?aggregator=' . rawurlencode($providerCode),
@@ -66,7 +66,7 @@ final class ProviderController extends AbstractController
             throw $this->createNotFoundException(sprintf('Dataset not found: %s', $datasetKey));
         }
 
-        return $this->render('@SurvosDataBundle/dataset/show.html.twig', [
+        return $this->render('@SurvosDatasetBundle/dataset/show.html.twig', [
             'dataset' => $dataset,
             'provider' => $dataset->providerEntity,
         ]);
