@@ -12,6 +12,7 @@ use Survos\DatasetBundle\Command\DatasetIterateCommand;
 use Survos\DatasetBundle\Command\ScanDatasetsCommand;
 use Survos\DatasetBundle\Event\DatasetIterateEvent;
 use Survos\DatasetBundle\EventListener\SubjectImportListener;
+use Survos\DatasetBundle\Service\DatasetIntlService;
 use Survos\DatasetBundle\Service\PhraseExtractor;
 use Survos\DatasetBundle\Context\DatasetContext;
 use Survos\DatasetBundle\Context\DatasetResolver;
@@ -154,6 +155,13 @@ final class SurvosDatasetBundle extends AbstractBundle
 
         if (class_exists(\Survos\ImportBundle\Event\ImportConvertRowEvent::class)) {
             $services->set(PhraseExtractor::class)
+                ->autowire()
+                ->autoconfigure()
+                ->public();
+        }
+
+        if (class_exists(\Survos\LinguaBundle\Service\LinguaClient::class)) {
+            $services->set(DatasetIntlService::class)
                 ->autowire()
                 ->autoconfigure()
                 ->public();
