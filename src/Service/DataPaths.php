@@ -124,6 +124,7 @@ final class DataPaths
             'extract'    => '10_extract',
             'normalize'  => '20_normalize',
             'normalized' => '20_normalize',
+            'intl'       => '25_intl',
             'terms'      => '30_terms',
             'ai'         => '40_ai',
             'enrich'     => '60_enrich',
