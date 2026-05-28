@@ -5,12 +5,12 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
-        "Survos\\DataBundle\\": "src/"
+            "Survos\\DatasetBundle\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-        "Survos\\DataBundle\\Tests\\": "tests/"
+            "Survos\\DatasetBundle\\Tests\\": "tests/"
         }
     },
     "require": {
