@@ -143,6 +143,7 @@ final class DataPaths
     public string $runsRootDir { get => "{$this->root}/{$this->runsRoot}"; }
     public string $cacheRootDir { get => "{$this->root}/{$this->cacheRoot}"; }
     public string $folioRootDir { get => "{$this->root}/folio"; }
+    public string $folioArchiveRootDir { get => "{$this->root}/folio-archive"; }
     public string $zipsRootDir {
         get => str_starts_with($this->zipsRoot, '/')
             ? rtrim($this->zipsRoot, '/')
@@ -193,6 +194,23 @@ final class DataPaths
     {
         $parsed = $this->parseDatasetRef($datasetKey);
         $path = sprintf('%s/%s/%s.%s', $this->folioRootDir, $parsed['provider'], $parsed['code'], ltrim($extension, '.'));
+
+        if ($create) {
+            $this->filesystem()->mkdir(dirname($path));
+        }
+
+        return $path;
+    }
+
+    /**
+     * Path to the index-free distributable folio archive, e.g.
+     * <root>/folio-archive/<provider>/<code>.folio.gz. Sibling of folioFile() so durable,
+     * re-uploadable archives are not co-mingled with the rebuildable working folio cache.
+     */
+    public function folioArchiveFile(string $datasetKey, string $extension = 'folio.gz', bool $create = false): string
+    {
+        $parsed = $this->parseDatasetRef($datasetKey);
+        $path = sprintf('%s/%s/%s.%s', $this->folioArchiveRootDir, $parsed['provider'], $parsed['code'], ltrim($extension, '.'));
 
         if ($create) {
             $this->filesystem()->mkdir(dirname($path));
