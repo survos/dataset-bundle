@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Command;
 
+use Survos\DatasetBundle\Enum\Stage;
 use Survos\DatasetBundle\Service\DataPaths;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Argument;
@@ -169,12 +170,10 @@ final class DataDiagCommand
     {
         $io->section(sprintf('Dataset: %s', $unit));
 
-        $stages = [
-            '05_raw' => $this->paths->stageDir($unit, '05_raw'),
-            '10_extract' => $this->paths->stageDir($unit, '10_extract'),
-            '20_normalize' => $this->paths->stageDir($unit, '20_normalize'),
-            '30_terms' => $this->paths->stageDir($unit, '30_terms'),
-        ];
+        $stages = [];
+        foreach ([Stage::Raw, Stage::Extract, Stage::Normalize, Stage::Terms, Stage::Enrich] as $s) {
+            $stages[$s->dir()] = $this->paths->stageDir($unit, $s);
+        }
 
         $rows = [];
         foreach ($stages as $label => $dir) {

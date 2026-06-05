@@ -140,7 +140,7 @@ final class ScanDatasetsCommand extends DataCommand
                 continue;
             }
 
-            $files = glob($providerDir . '/*/00_meta/dataset.json', GLOB_NOSORT) ?: [];
+            $files = glob($providerDir . '/*/_meta/dataset.json', GLOB_NOSORT) ?: [];
             $totalMetaFiles += count($files);
 
             foreach ($files as $metaFile) {
@@ -313,7 +313,6 @@ final class ScanDatasetsCommand extends DataCommand
         // ── Phase 3: Update status for all scanned entries ────────────────────
         foreach ($repo->findAll() as $info) {
             $this->updateStatus($info);
-            $this->ensureMaterializedDirectories($info);
         }
         $this->em->flush();
 
@@ -642,18 +641,6 @@ final class ScanDatasetsCommand extends DataCommand
             $info->hasRaw()             => 'raw',
             default                     => $info->status ?: 'discovered',
         };
-    }
-
-    private function ensureMaterializedDirectories(DatasetInfo $info): void
-    {
-        if ($info->status !== 'materialized') {
-            return;
-        }
-
-        $this->dataPaths->filesystem()->mkdir($this->dataPaths->datasetDir($info->datasetKey));
-        foreach ($this->dataPaths->stageMap as $stageDir) {
-            $this->dataPaths->filesystem()->mkdir($this->dataPaths->datasetDir($info->datasetKey) . '/' . $stageDir);
-        }
     }
 
     private function countJsonlLines(string $filename): int

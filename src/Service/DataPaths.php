@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Service;
 
+use Survos\DatasetBundle\Enum\Stage;
 use Symfony\Component\Filesystem\Filesystem;
 
 use function preg_replace;
@@ -100,13 +101,6 @@ final class DataPaths
         return strtolower($safe);
     }
 
-    /**
-     * Stage aliases (semantic -> directory).
-     *
-     * @var array<string,string>
-     */
-    public readonly array $stageMap;
-
     public function __construct(
         public private(set) string $dataDir,
         public private(set) string $worksRoot = 'work',
@@ -114,28 +108,9 @@ final class DataPaths
         public private(set) string $artifactRoot = 'artifacts',
         public private(set) string $runsRoot = 'runs',
         public private(set) string $cacheRoot = 'cache',
-        public private(set) string $zipsRoot = 'zips',
+        public private(set) string $zipsRoot = 'vault',
         public private(set) string $defaultObjectFilename = 'obj.jsonl',
     ) {
-        // Work-tree stage dirs (see docs/data-layout.md). No numeric prefixes; names sort
-        // in pipeline order. "_"-prefixed dirs are tier portals (config/vault/folio), often
-        // symlinks, not computed stages. AI claims are NOT a work stage — they live in vault.
-        $this->stageMap = [
-            'meta'       => '_meta',
-            'raw'        => '_raw',
-            'extract'    => 'extract',
-            'normalize'  => 'norm',
-            'normalized' => 'norm',
-            'norm'       => 'norm',
-            'intl'       => 'trans',
-            'trans'      => 'trans',
-            'terms'      => 'voc',
-            'voc'        => 'voc',
-            'enrich'     => '_folio',
-            'enriched'   => '_folio',
-            'assemble'   => '_folio',
-            'folio'      => '_folio',
-        ];
     }
 
     public string $root { get => rtrim($this->dataDir, '/'); }
@@ -240,22 +215,10 @@ final class DataPaths
      *  - semantic keys: raw|normalize|profile|terms|...
      *  - canonical stage dirs: 05_raw|20_normalize|...
      */
-    public function stageDir(string $datasetKey, string $stage, bool $create = false): string
+    public function stageDir(string $datasetKey, Stage|string $stage, bool $create = false): string
     {
-        $stage = trim($stage);
-        if ($stage === '') {
-            throw new \InvalidArgumentException('Stage cannot be empty.');
-        }
-
-        // If caller passed a canonical directory (e.g. "05_raw"), keep it.
-        $dir = $stage;
-
-        // If caller passed a semantic key (e.g. "raw"), map it.
-        if (isset($this->stageMap[$stage])) {
-            $dir = $this->stageMap[$stage];
-        }
-
-        $path = $this->datasetDir($datasetKey) . '/' . $dir;
+        $resolved = $stage instanceof Stage ? $stage : Stage::fromKey($stage); // unknown → throws
+        $path = $this->datasetDir($datasetKey) . '/' . $resolved->dir();
 
         if ($create) {
             $this->filesystem()->mkdir($path);

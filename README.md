@@ -56,29 +56,47 @@ APP_DATA_DIR=/absolute/path/to/data/root
 The bundle avoids repository-relative paths and gives services and commands one
 place to ask for canonical locations.
 
-Example layout:
+### Tiers (v2)
+
+Placement is decided by one rule: *can I regenerate it from another tier + code?*
+
+| Tier | Holds | Backed up / shipped? |
+|------|-------|----------------------|
+| `vault/` | acquired source + AI claims + `_vocab/` reference | yes — durable, mirror of HF/S3 |
+| `cache/` | bulky re-fetchable materializations (clones, firehose, unzipped) | no |
+| `work/` | pipeline output — **disposable** (`rm -rf work/<p>/<c>` is always safe) | no |
+| `folio/` | built `.folio` databases | no — rebuilt from `work` |
 
 ```text
 $APP_DATA_DIR/
-  work/
-    <datasetKey>/
-      00_meta/
-        dataset.json
-      10_extract/
-        obj.jsonl
-      20_normalize/
-        obj.jsonl
-      21_profile/
-        obj.profile.json
-      30_terms/
-        *.jsonl
-  pixie/
-    tenants/
-      <tenant>.db
-    template/
-    exports/
-  runs/
-  cache/
+  vault/
+    <provider>/<code>/        # acquired source files
+      ai/claims.jsonl         # AI claims (expensive → durable, never in work)
+    _vocab/                   # global reference vocab (non-provider → _)
+  cache/<provider>/...        # disposable, re-fetchable
+  work/<provider>/<code>/
+    _meta/dataset.json        # config (portal from code)
+    _raw/                     # source view (portal → vault; often a symlink)
+    norm/                     # normalized cores + term/termSet + link/linkType
+    voc/                      # extracted vocab (feeds AI content_type mapping)
+    trans/                    # translations
+    _folio/                   # assembled folio-input (portal → folio tier)
+  folio/<provider>/<code>.folio
+```
+
+Work-tree stage directory names have **no numeric prefixes** and sort in pipeline
+order; `_`-prefixed dirs are **tier portals** (config / vault / folio), often symlinks,
+not computed stages.
+
+### `Stage` enum — the single source of truth
+
+`Survos\DatasetBundle\Enum\Stage` owns stage identity and dir names. The backed value
+is the stable semantic key (events, `import:convert --stage`); `Stage::dir()` is the only
+place directory names live; `Stage::fromKey()` is the fail-loud string boundary (unknown →
+throws). Reference `Stage` cases in code — do not pass raw stage strings.
+
+```php
+$paths->stageDir('dc/tb09jw350', Stage::Normalize); // .../norm
 ```
 
 ## Installation

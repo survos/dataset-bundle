@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Service;
 
+use Survos\DatasetBundle\Enum\Stage;
+
 /**
  * Dataset-scoped view over DataPaths.
  *
@@ -21,13 +23,13 @@ final class DatasetPaths
 
     // ---- Canonical stages (property hooks) ----
 
-    public string $metaDir { get => $this->stageDir('meta'); }        // 00_meta
-    public string $rawDir { get => $this->stageDir('raw'); }          // 05_raw
-    public string $extractDir { get => $this->stageDir('extract'); }  // 10_extract
-    public string $normalizeDir { get => $this->stageDir('normalize'); } // 20_normalize
-    public string $termsDir  { get => $this->stageDir('terms'); }      // 30_terms
-    public string $aiDir     { get => $this->stageDir('ai'); }         // 40_ai
-    public string $enrichDir { get => $this->stageDir('enrich'); }     // 60_enrich
+    public string $metaDir { get => $this->stageDir(Stage::Meta); }        // _meta
+    public string $rawDir { get => $this->stageDir(Stage::Raw); }          // _raw (portal → vault)
+    public string $extractDir { get => $this->stageDir(Stage::Extract); }  // extract
+    public string $normalizeDir { get => $this->stageDir(Stage::Normalize); } // norm
+    public string $termsDir  { get => $this->stageDir(Stage::Terms); }      // voc
+    public string $aiDir     { get => $this->paths->aiDir($this->datasetKey); } // vault/<p>/<c>/ai
+    public string $enrichDir { get => $this->stageDir(Stage::Enrich); }     // _folio (assembled)
 
     // ---- Common files ----
 
@@ -70,21 +72,11 @@ final class DatasetPaths
      *  - stageDir('extract') => .../10_extract
      *  - stageDir('10_extract') => .../10_extract
      */
-    public function stageDir(string $stage): string
+    public function stageDir(Stage|string $stage): string
     {
-        $stage = trim($stage, '/');
+        $resolved = $stage instanceof Stage ? $stage : Stage::fromKey($stage); // unknown → throws
 
-        // Accept literal stage directories directly
-        if (preg_match('/^\d{2}_[a-z0-9_]+$/i', $stage)) {
-            return "{$this->dir}/{$stage}";
-        }
-
-        $map = $this->paths->stageMap;
-        if (!isset($map[$stage])) {
-            throw new \RuntimeException(sprintf('Unknown stage "%s" for dataset "%s".', $stage, $this->key));
-        }
-
-        return "{$this->dir}/{$map[$stage]}";
+        return "{$this->dir}/{$resolved->dir()}";
     }
 
     // ---- Convenience: raw filename normalization ----

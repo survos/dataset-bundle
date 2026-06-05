@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Service;
 
+use Survos\DatasetBundle\Enum\Stage;
 use Survos\ImportBundle\Contract\DatasetPathsFactoryInterface;
 use Survos\ImportBundle\Model\DatasetPaths;
 
@@ -27,9 +28,9 @@ final class SurvosDatasetPathsFactory implements DatasetPathsFactoryInterface
     public function for(string $datasetKey): DatasetPaths
     {
         $datasetRoot  = $this->dataPaths->datasetDir($datasetKey);
-        $rawDir       = $this->dataPaths->stageDir($datasetKey, '05_raw');
-        $normalizeDir = $this->dataPaths->stageDir($datasetKey, '20_normalize');
-        $termsDir     = $this->dataPaths->stageDir($datasetKey, '30_terms');
+        $rawDir       = $this->dataPaths->stageDir($datasetKey, Stage::Raw);
+        $normalizeDir = $this->dataPaths->stageDir($datasetKey, Stage::Normalize);
+        $termsDir     = $this->dataPaths->stageDir($datasetKey, Stage::Terms);
         $objFilename  = $this->dataPaths->defaultObjectFilename;
 
         return new DatasetPaths(

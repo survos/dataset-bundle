@@ -9,6 +9,7 @@ use Survos\DatasetBundle\Command\DataHeadCommand;
 use Survos\DatasetBundle\Command\DataPathCommand;
 use Survos\DatasetBundle\Command\DataPurgeCommand;
 use Survos\DatasetBundle\Command\DatasetIterateCommand;
+use Survos\DatasetBundle\Command\DatasetStageCommands;
 use Survos\DatasetBundle\Command\ScanDatasetsCommand;
 use Survos\DatasetBundle\Event\DatasetIterateEvent;
 use Survos\DatasetBundle\EventListener\SubjectImportListener;
@@ -52,7 +53,7 @@ final class SurvosDatasetBundle extends AbstractBundle
                 ->scalarNode('artifact_root')->defaultValue('artifacts')->end()
                 ->scalarNode('runs_root')->defaultValue('runs')->end()
                 ->scalarNode('cache_root')->defaultValue('cache')->end()
-                ->scalarNode('zips_root')->defaultValue('%env(ZIPS_DIR)%')->end()
+                ->scalarNode('zips_root')->defaultValue('vault')->end()
                 ->scalarNode('default_object_filename')->defaultValue('obj.jsonl')->end()
                 ->arrayNode('providers')
                     ->info('Optional application-level provider allowlist. When set, data:scan-datasets only scans these provider directories.')
@@ -133,7 +134,7 @@ final class SurvosDatasetBundle extends AbstractBundle
             $services->alias(DatasetContextInterface::class, DatasetContext::class)->public();
         }
 
-        foreach ([DataDiagCommand::class, DataPathCommand::class, DataPurgeCommand::class, DataHeadCommand::class, DataBrowseCommand::class, DatasetIterateCommand::class] as $class) {
+        foreach ([DataDiagCommand::class, DataPathCommand::class, DataPurgeCommand::class, DataHeadCommand::class, DataBrowseCommand::class, DatasetIterateCommand::class, DatasetStageCommands::class] as $class) {
             $services->set($class)
                 ->autowire()
                 ->autoconfigure()
