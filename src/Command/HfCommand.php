@@ -82,12 +82,12 @@ final class HfCommand
             if (is_file($dest) && (int) filesize($dest) === $f['size']) {
                 $skipped++;
                 if ($io->isVerbose()) {
-                    $io->writeln(sprintf('  <comment>skip</comment> %s (%s)', $f['path'], $this->fmt($f['size'])));
+                    $io->writeln(sprintf('  <comment>skip</comment> %s (%s)', $f['path'], Bytes::parse($f['size'])->humanize()));
                 }
                 continue;
             }
             if ($dryRun) {
-                $io->writeln(sprintf('  would pull %s (%s)', $f['path'], $this->fmt($f['size'])));
+                $io->writeln(sprintf('  would pull %s (%s)', $f['path'], Bytes::parse($f['size'])->humanize()));
                 continue;
             }
             try {
@@ -95,7 +95,7 @@ final class HfCommand
                 $bytes += $written;
                 $pulled++;
                 if ($io->isVerbose()) {
-                    $io->writeln(sprintf('  <info>pull</info> %s (%s)', $f['path'], $this->fmt($written)));
+                    $io->writeln(sprintf('  <info>pull</info> %s (%s)', $f['path'], Bytes::parse($written)->humanize()));
                 }
             } catch (\Throwable $e) {
                 $failed++;
@@ -105,7 +105,7 @@ final class HfCommand
 
         $io->success(sprintf(
             'pulled %d · skipped %d · failed %d  (%s)  →  %s',
-            $pulled, $skipped, $failed, $this->fmt($bytes), $this->paths->providerArchiveRoot($provider),
+            $pulled, $skipped, $failed, Bytes::parse($bytes)->humanize(), $this->paths->providerArchiveRoot($provider),
         ));
         if ($pulled > 0 && !$dryRun) {
             $io->note('Next: symlink → import:convert (normalize) → folio:build.');
@@ -168,7 +168,7 @@ final class HfCommand
 
         if ($dryRun) {
             foreach ($map as $repoPath => $local) {
-                $io->writeln(sprintf('  would push %s (%s)', $repoPath, $this->fmt((int) filesize($local))));
+                $io->writeln(sprintf('  would push %s (%s)', $repoPath, Bytes::parse((int) filesize($local))->humanize()));
             }
             return Command::SUCCESS;
         }
@@ -177,17 +177,5 @@ final class HfCommand
 
         $io->success(sprintf('uploaded %d · skipped %d (already present)', count($result['uploaded']), count($result['skipped'])));
         return Command::SUCCESS;
-    }
-
-    private function fmt(int $bytes): string
-    {
-        $u = ['B', 'KB', 'MB', 'GB'];
-        $i = 0;
-        $n = (float) $bytes;
-        while ($n >= 1024 && $i < count($u) - 1) {
-            $n /= 1024;
-            $i++;
-        }
-        return sprintf('%.1f%s', $n, $u[$i]);
     }
 }

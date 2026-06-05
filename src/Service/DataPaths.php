@@ -117,21 +117,24 @@ final class DataPaths
         public private(set) string $zipsRoot = 'zips',
         public private(set) string $defaultObjectFilename = 'obj.jsonl',
     ) {
-        // semantic aliases are convenient for callers; canonical dirs remain numeric-prefixed.
+        // Work-tree stage dirs (see docs/data-layout.md). No numeric prefixes; names sort
+        // in pipeline order. "_"-prefixed dirs are tier portals (config/vault/folio), often
+        // symlinks, not computed stages. AI claims are NOT a work stage — they live in vault.
         $this->stageMap = [
-            'meta'       => '00_meta',
-            'raw'        => '05_raw',
-            'extract'    => '10_extract',
-            'normalize'  => '20_normalize',
-            'normalized' => '20_normalize',
-            'intl'       => '25_intl',
-            'terms'      => '30_terms',
-            'ai'         => '40_ai',
-            'enrich'     => '60_enrich',
-            'enriched'   => '60_enrich',
-            'enrich_profile' => '61_profile',
-
-            // allow direct numeric stage keys too (identity mapping handled in stageDir()).
+            'meta'       => '_meta',
+            'raw'        => '_raw',
+            'extract'    => 'extract',
+            'normalize'  => 'norm',
+            'normalized' => 'norm',
+            'norm'       => 'norm',
+            'intl'       => 'trans',
+            'trans'      => 'trans',
+            'terms'      => 'voc',
+            'voc'        => 'voc',
+            'enrich'     => '_folio',
+            'enriched'   => '_folio',
+            'assemble'   => '_folio',
+            'folio'      => '_folio',
         ];
     }
 
@@ -346,15 +349,21 @@ final class DataPaths
     // Keyed by the provider batch ID (e.g. OpenAI's "batch_abc123"), NOT our
     // local integer ID — so files survive DB resets and are portable.
 
+    /**
+     * AI claims/batch dir — expensive (LLM spend), so it lives in the durable VAULT,
+     * never the disposable work tree: vault/<provider>/<code>/ai/.
+     */
     public function aiDir(string $datasetKey): string
     {
-        return $this->stageDir($datasetKey, 'ai');
+        $parsed = $this->parseDatasetRef($datasetKey);
+
+        return $this->providerArchiveRoot($parsed['provider']) . '/' . $parsed['code'] . '/ai';
     }
 
-    /** Canonical path for a dataset's exported AI claims archive (lives in 40_ai/). */
+    /** Canonical path for a dataset's AI claims (vault/<p>/<c>/ai/). */
     public function claimsFile(string $datasetKey, string $filename = 'claims.jsonl'): string
     {
-        return $this->stageDir($datasetKey, 'ai', create: true) . '/' . $filename;
+        return $this->ensureAiDir($datasetKey) . '/' . $filename;
     }
 
     /** Canonical path for the enriched (normalize + AI) JSONL and its profile. */
@@ -392,7 +401,7 @@ final class DataPaths
     //         labels.jsonl     ← ContentType slug → display label (shared)
     //     translation/          ← stub for future translation memory
 
-    public string $vocabDir { get => "{$this->root}/vocab"; }
+    public string $vocabDir { get => "{$this->zipsRootDir}/_vocab"; }
 
     public function vocabLangDir(string $lang, bool $create = false): string
     {
