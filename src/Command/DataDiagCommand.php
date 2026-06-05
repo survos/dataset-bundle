@@ -201,10 +201,10 @@ final class DataDiagCommand
         $io->table($headers, $rows);
 
         // Also print a compact numeric summary like your example
-        $extract = $this->countFilesAndDirs($this->paths->stageDir($unit, '10_extract'));
-        $norm = $this->countFilesAndDirs($this->paths->stageDir($unit, '20_normalize'));
-        $io->writeln(sprintf('10_extract: %d dirs, %d files', $extract['dirs'], $extract['files']));
-        $io->writeln(sprintf('20_normalize: %d dirs, %d files', $norm['dirs'], $norm['files']));
+        $extract = $this->countFilesAndDirs($this->paths->stageDir($unit, Stage::Extract));
+        $norm = $this->countFilesAndDirs($this->paths->stageDir($unit, Stage::Normalize));
+        $io->writeln(sprintf('%s: %d dirs, %d files', Stage::Extract->dir(), $extract['dirs'], $extract['files']));
+        $io->writeln(sprintf('%s: %d dirs, %d files', Stage::Normalize->dir(), $norm['dirs'], $norm['files']));
 
         return Command::SUCCESS;
     }
