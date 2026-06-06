@@ -35,19 +35,27 @@ use Survos\DatasetBundle\Service\ProviderSnapshotCodec;
 use Survos\DatasetBundle\Service\SurvosDatasetPathsFactory;
 use Survos\ImportBundle\Contract\DatasetContextInterface;
 use Survos\ImportBundle\Contract\DatasetPathsFactoryInterface;
+use Survos\Kit\Traits\HasConfigurableRoutes;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
-use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 
 final class SurvosDatasetBundle extends AbstractBundle
 {
+    use HasConfigurableRoutes;
+
 
     public function configure(DefinitionConfigurator $definition): void
     {
         $definition->rootNode()
             ->children()
+                ->booleanNode('routes_enabled')->defaultTrue()
+                    ->info('Set false to disable automatic bundle route registration.')
+                ->end()
+                ->scalarNode('route_prefix')->defaultValue('')
+                    ->info('URL prefix applied to all routes from this bundle.')
+                ->end()
                 ->scalarNode('data_dir')->defaultValue('%env(APP_DATA_DIR)%')->end()
                 ->scalarNode('dataset_root')->defaultValue('work')->end()
                 ->scalarNode('artifact_root')->defaultValue('artifacts')->end()
@@ -72,8 +80,14 @@ final class SurvosDatasetBundle extends AbstractBundle
             ->end();
     }
 
+    public function build(ContainerBuilder $container): void
+    {
+        $this->addRouteLoaderCompilerPass($container);
+    }
+
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void
     {
+        $this->captureRouteConfig($config);
         $services = $container->services();
 
         $services->set(DataPaths::class)
@@ -204,12 +218,14 @@ final class SurvosDatasetBundle extends AbstractBundle
             ->public()
             ->arg('$enabledProviders', $config['providers']);
 
-        if (class_exists(\Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber::class)) {
+        if ($config['routes_enabled'] && class_exists(\Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber::class)) {
             $services->set(DataMenuSubscriber::class)
                 ->autowire()
                 ->autoconfigure()
                 ->public();
         }
+        $this->registerRouteLoader($builder);
+
 
         $services->set(Tenant\TenantRegistry::class)
             ->autowire()
@@ -267,11 +283,6 @@ final class SurvosDatasetBundle extends AbstractBundle
                 ],
             ]);
         }
-    }
-
-    public function configureRoutes(RoutingConfigurator $routes): void
-    {
-        $routes->import(dirname(__DIR__) . '/src/Controller/', 'attribute');
     }
 
 }

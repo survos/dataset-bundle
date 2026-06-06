@@ -168,6 +168,14 @@ final class DataPaths
         return $this->providerArchiveRoot($providerId) . '/' . $relativePath;
     }
 
+    /** Canonical durable raw JSONL artifact: vault/<provider>/<code>/<core>.jsonl[.gz]. */
+    public function providerRawFile(string $datasetKey, string $file = 'obj.jsonl.gz'): string
+    {
+        $parsed = $this->parseDatasetRef($datasetKey);
+
+        return $this->providerArchiveFile($parsed['provider'], $parsed['code'] . '/' . ltrim($file, '/'));
+    }
+
     public function folioFile(string $datasetKey, string $extension = 'folio', bool $create = false): string
     {
         $parsed = $this->parseDatasetRef($datasetKey);
@@ -230,8 +238,9 @@ final class DataPaths
     /**
      * Return candidate files for a dataset stage, in preferred read order.
      *
-     * Raw stages may be backed either by a staged file in work/<provider>/<code>/05_raw
-     * or by a provider archive at archive/<provider>/<code>.jsonl(.gz).
+     * Raw stages may be backed by a staged file in work/<provider>/<code>/_raw,
+     * by the canonical vault raw file at vault/<provider>/<code>/obj.jsonl(.gz),
+     * or by a legacy flat provider archive at vault/<provider>/<code>.jsonl(.gz).
      *
      * @return list<string>
      */
@@ -253,6 +262,8 @@ final class DataPaths
         if ($stage === 'raw' || $stage === '05_raw') {
             $candidates[] = $candidates[0] . '.gz';
             $parsed = $this->parseDatasetRef($datasetKey);
+            $candidates[] = $this->providerRawFile($datasetKey, $this->defaultObjectFilename . '.gz');
+            $candidates[] = $this->providerRawFile($datasetKey, $this->defaultObjectFilename);
             $candidates[] = $this->providerArchiveFile($parsed['provider'], $parsed['code'] . '.jsonl.gz');
             $candidates[] = $this->providerArchiveFile($parsed['provider'], $parsed['code'] . '.jsonl');
         }
