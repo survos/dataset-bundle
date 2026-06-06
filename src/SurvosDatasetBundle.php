@@ -212,11 +212,13 @@ final class SurvosDatasetBundle extends AbstractBundle
             ->public()
             ->arg('$enabledProviders', $config['providers']);
 
-        $services->set(ProviderController::class)
-            ->autowire()
-            ->autoconfigure()
-            ->public()
-            ->arg('$enabledProviders', $config['providers']);
+        if ($config['routes_enabled']) {
+            $services->set(ProviderController::class)
+                ->autowire()
+                ->autoconfigure()
+                ->public()
+                ->arg('$enabledProviders', $config['providers']);
+        }
 
         if ($config['routes_enabled'] && class_exists(\Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber::class)) {
             $services->set(DataMenuSubscriber::class)

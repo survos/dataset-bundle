@@ -20,11 +20,11 @@ use function trim;
  *   $APP_DATA_DIR/
  *     data/<datasetKey>/
  *       00_meta/
- *       05_raw/
- *       10_extract/
- *       20_normalize/
- *       21_profile/
- *       30_terms/
+ *       _raw/
+ *       extract/
+ *       norm/
+ *       profile/
+ *       voc/
  *     artifacts/...
  *     runs/...
  *     cache/...
@@ -221,7 +221,7 @@ final class DataPaths
      *
      * Accepts either:
      *  - semantic keys: raw|normalize|profile|terms|...
-     *  - canonical stage dirs: 05_raw|20_normalize|...
+     *  - canonical stage dirs: _raw|norm|...
      */
     public function stageDir(string $datasetKey, Stage|string $stage, bool $create = false): string
     {

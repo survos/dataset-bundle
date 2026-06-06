@@ -17,7 +17,7 @@ use Survos\ImportBundle\Model\DatasetPaths;
  *
  * Profile files are sidecars — same directory as the JSONL they describe.
  * profileDir is intentionally omitted so DatasetPaths.profileObjectPath()
- * defaults to dirname(normalizedObjectPath) = 20_normalize/.
+ * defaults to dirname(normalizedObjectPath) = norm/.
  */
 final class SurvosDatasetPathsFactory implements DatasetPathsFactoryInterface
 {
@@ -41,7 +41,7 @@ final class SurvosDatasetPathsFactory implements DatasetPathsFactoryInterface
             normalizedDir: $normalizeDir,
             normalizedObjectPath: $normalizeDir . '/' . $objFilename,
             termsDir: $termsDir,
-            // profileDir omitted → sidecar default: 20_normalize/obj.profile.json
+            // profileDir omitted → sidecar default: norm/obj.profile.json
         );
     }
 }
