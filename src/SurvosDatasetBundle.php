@@ -12,6 +12,7 @@ use Survos\DatasetBundle\Command\DatasetIterateCommand;
 use Survos\DatasetBundle\Command\DatasetStageCommands;
 use Survos\DatasetBundle\Command\ScanDatasetsCommand;
 use Survos\DatasetBundle\Event\DatasetIterateEvent;
+use Survos\DatasetBundle\Event\DatasetArtifactUpdatedEvent;
 use Survos\DatasetBundle\EventListener\SubjectImportListener;
 use Survos\DatasetBundle\Service\DatasetIntlService;
 use Survos\DatasetBundle\Service\PhraseExtractor;
@@ -20,6 +21,8 @@ use Survos\DatasetBundle\Context\DatasetResolver;
 use Survos\DatasetBundle\Controller\ProviderController;
 use Survos\DatasetBundle\Doctrine\SqliteWalMiddleware;
 use Survos\DatasetBundle\EventListener\DatasetContextConsoleListener;
+use Survos\DatasetBundle\EventListener\DatasetRegistryArtifactListener;
+use Survos\DatasetBundle\EventListener\DatasetRegistryImportConvertListener;
 use Survos\DatasetBundle\Meta\DatasetMetadataConfiguration;
 use Survos\DatasetBundle\Meta\DatasetMetadataEnsurer;
 use Survos\DatasetBundle\Meta\DatasetMetadataLoader;
@@ -33,6 +36,7 @@ use Survos\DatasetBundle\Service\DataPaths;
 use Survos\DatasetBundle\Service\DatasetRegistryUpdater;
 use Survos\DatasetBundle\Service\ProviderSnapshotCodec;
 use Survos\DatasetBundle\Service\SurvosDatasetPathsFactory;
+use Survos\ImportBundle\Event\ImportConvertFinishedEvent;
 use Survos\ImportBundle\Contract\DatasetContextInterface;
 use Survos\ImportBundle\Contract\DatasetPathsFactoryInterface;
 use Survos\Kit\Traits\HasConfigurableRoutes;
@@ -57,6 +61,9 @@ final class SurvosDatasetBundle extends AbstractBundle
                     ->info('URL prefix applied to all routes from this bundle.')
                 ->end()
                 ->scalarNode('data_dir')->defaultValue('%env(APP_DATA_DIR)%')->end()
+                ->scalarNode('registry_database_path')->defaultValue('%env(APP_DATA_DIR)%/datasets.db')
+                    ->info('SQLite database path for the shared dataset registry cache.')
+                ->end()
                 ->scalarNode('dataset_root')->defaultValue('work')->end()
                 ->scalarNode('artifact_root')->defaultValue('artifacts')->end()
                 ->scalarNode('runs_root')->defaultValue('runs')->end()
@@ -88,6 +95,7 @@ final class SurvosDatasetBundle extends AbstractBundle
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void
     {
         $this->captureRouteConfig($config);
+        $container->parameters()->set('survos_dataset.registry_database_path', $config['registry_database_path']);
         $services = $container->services();
 
         $services->set(DataPaths::class)
@@ -112,7 +120,8 @@ final class SurvosDatasetBundle extends AbstractBundle
         $services->set(DatasetRegistryUpdater::class)
             ->autowire()
             ->autoconfigure()
-            ->public();
+            ->public()
+            ->arg('$entityManager', new \Symfony\Component\DependencyInjection\Reference('doctrine.orm.dataset_entity_manager'));
 
         foreach ([DatasetMetadataConfiguration::class, DatasetMetadataLoader::class, DatasetMetadataEnsurer::class] as $class) {
             $services->set($class)
@@ -159,6 +168,7 @@ final class SurvosDatasetBundle extends AbstractBundle
             ->autowire()
             ->autoconfigure()
             ->public()
+            ->arg('$em', new \Symfony\Component\DependencyInjection\Reference('doctrine.orm.dataset_entity_manager'))
             ->arg('$enabledProviders', $config['providers']);
 
         if (class_exists(\Survos\AiWorkflowBundle\Entity\Subject::class)) {
@@ -166,6 +176,20 @@ final class SurvosDatasetBundle extends AbstractBundle
                 ->autowire()
                 ->autoconfigure()
                 ->public();
+        }
+
+        $services->set(DatasetRegistryArtifactListener::class)
+            ->autowire()
+            ->autoconfigure()
+            ->public()
+            ->tag('kernel.event_listener', ['event' => DatasetArtifactUpdatedEvent::class]);
+
+        if (class_exists(\Survos\ImportBundle\Event\ImportConvertFinishedEvent::class)) {
+            $services->set(DatasetRegistryImportConvertListener::class)
+                ->autowire()
+                ->autoconfigure()
+                ->public()
+                ->tag('kernel.event_listener', ['event' => ImportConvertFinishedEvent::class]);
         }
 
         if (class_exists(\Survos\ImportBundle\Event\ImportConvertRowEvent::class)) {
@@ -241,19 +265,42 @@ final class SurvosDatasetBundle extends AbstractBundle
 
     public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
     {
+        $registryDatabasePath = '%env(APP_DATA_DIR)%/datasets.db';
+        foreach ($builder->getExtensionConfig('survos_dataset') as $extensionConfig) {
+            if (isset($extensionConfig['registry_database_path']) && is_string($extensionConfig['registry_database_path']) && $extensionConfig['registry_database_path'] !== '') {
+                $registryDatabasePath = $extensionConfig['registry_database_path'];
+            }
+        }
+        $builder->setParameter('survos_dataset.registry_database_path', $registryDatabasePath);
+
         $entityDir = dirname(__DIR__) . '/src/Entity';
         $templateDir = dirname(__DIR__) . '/templates';
 
         if ($builder->hasExtension('doctrine')) {
             $builder->prependExtensionConfig('doctrine', [
+                'dbal' => [
+                    'connections' => [
+                        'dataset' => [
+                            'driver' => 'pdo_sqlite',
+                            'path' => '%survos_dataset.registry_database_path%',
+                            'logging' => false,
+                        ],
+                    ],
+                ],
                 'orm' => [
-                    'mappings' => [
-                        'SurvosDatasetBundle' => [
-                            'is_bundle' => false,
-                            'type' => 'attribute',
-                            'dir' => $entityDir,
-                            'prefix' => 'Survos\DatasetBundle\Entity',
-                            'alias' => 'SurvosDatasetBundle',
+                    'entity_managers' => [
+                        'dataset' => [
+                            'connection' => 'dataset',
+                            'naming_strategy' => 'doctrine.orm.naming_strategy.underscore_number_aware',
+                            'mappings' => [
+                                'SurvosDatasetBundle' => [
+                                    'is_bundle' => false,
+                                    'type' => 'attribute',
+                                    'dir' => $entityDir,
+                                    'prefix' => 'Survos\DatasetBundle\Entity',
+                                    'alias' => 'SurvosDatasetBundle',
+                                ],
+                            ],
                         ],
                     ],
                 ],

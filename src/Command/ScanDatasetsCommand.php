@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\DatasetBundle\Command;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\SchemaTool;
 use Survos\DatasetBundle\Entity\Artifact;
 use Survos\DatasetBundle\Entity\DatasetInfo;
 use Survos\DatasetBundle\Entity\Provider;
@@ -57,6 +58,7 @@ final class ScanDatasetsCommand extends DataCommand
         #[Option('Delete existing DatasetInfo rows before scanning (scoped to --provider if given)')] bool $reset = false,
     ): int {
         $io->title('Scanning datasets → DatasetInfo registry');
+        $this->ensureRegistrySchema();
 
         $repo    = $this->datasetRepository;
         $created = $updated = $skipped = 0;
@@ -364,6 +366,26 @@ final class ScanDatasetsCommand extends DataCommand
         return 0;
     }
 
+    private function ensureRegistrySchema(): void
+    {
+        $connection = $this->em->getConnection();
+        $params = $connection->getParams();
+        $path = $params['path'] ?? null;
+        if (is_string($path) && $path !== '') {
+            $dir = dirname($path);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0775, true);
+            }
+        }
+
+        $metadata = $this->em->getMetadataFactory()->getAllMetadata();
+        if ($metadata === []) {
+            return;
+        }
+
+        $schemaTool = new SchemaTool($this->em);
+        $schemaTool->updateSchema($metadata, true);
+    }
     /** @return array<string,string> providerCode => absolutePath */
     private function listProviderDirs(string $root, ?string $providerFilter): array
     {

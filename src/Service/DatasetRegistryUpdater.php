@@ -75,10 +75,15 @@ final class DatasetRegistryUpdater
      * @param array<string,int>|null $dtoCounts
      * @param array<string,mixed> $metadata
      */
-    public function updateFolioArtifact(
+    /**
+     * @param array<string,int>|null $dtoCounts
+     * @param array<string,mixed> $metadata
+     */
+    public function updateArtifact(
         string $datasetKey,
-        string $dbFile,
-        ?int $rowCount,
+        string $type,
+        string $uri,
+        ?int $rowCount = null,
         ?array $dtoCounts = null,
         array $metadata = [],
         string $code = Artifact::CODE_DEFAULT,
@@ -87,15 +92,15 @@ final class DatasetRegistryUpdater
 
         $artifact = $this->artifactRepository->findOneBy([
             'dataset' => $info,
-            'type' => Artifact::TYPE_FOLIO,
+            'type' => $type,
             'code' => $code,
-        ]) ?? new Artifact($info, Artifact::TYPE_FOLIO, $code);
+        ]) ?? new Artifact($info, $type, $code);
 
-        $artifact->uri = $dbFile;
-        $artifact->sizeBytes = is_file($dbFile) ? filesize($dbFile) : null;
+        $artifact->uri = $uri;
+        $artifact->sizeBytes = is_file($uri) ? filesize($uri) : null;
         $artifact->rowCount = $rowCount;
         $artifact->dtoCounts = $dtoCounts;
-        $artifact->updatedAt = is_file($dbFile) ? (new \DateTimeImmutable())->setTimestamp((int) filemtime($dbFile)) : new \DateTimeImmutable();
+        $artifact->updatedAt = is_file($uri) ? (new \DateTimeImmutable())->setTimestamp((int) filemtime($uri)) : new \DateTimeImmutable();
         $artifact->discoveredAt = new \DateTimeImmutable();
         $artifact->metadata = $metadata;
 
@@ -105,6 +110,29 @@ final class DatasetRegistryUpdater
         $this->entityManager->flush();
 
         return $artifact;
+    }
+
+    /**
+     * @param array<string,int>|null $dtoCounts
+     * @param array<string,mixed> $metadata
+     */
+    public function updateFolioArtifact(
+        string $datasetKey,
+        string $dbFile,
+        ?int $rowCount,
+        ?array $dtoCounts = null,
+        array $metadata = [],
+        string $code = Artifact::CODE_DEFAULT,
+    ): Artifact {
+        return $this->updateArtifact(
+            datasetKey: $datasetKey,
+            type: Artifact::TYPE_FOLIO,
+            uri: $dbFile,
+            rowCount: $rowCount,
+            dtoCounts: $dtoCounts,
+            metadata: $metadata,
+            code: $code,
+        );
     }
 
     public function requireDataset(string $datasetKey): DatasetInfo

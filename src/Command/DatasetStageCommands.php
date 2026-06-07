@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Command;
 
+use Survos\DatasetBundle\Entity\DatasetInfo;
 use Survos\DatasetBundle\Enum\Stage;
+use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\ImportBundle\Command\ImportConvertCommand;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -26,6 +28,7 @@ final class DatasetStageCommands
 {
     public function __construct(
         private readonly ImportConvertCommand $convert,
+        private readonly DatasetInfoRepository $datasets,
     ) {}
 
     #[AsCommand('dataset:normalize', 'Normalize a dataset or provider (→ norm/)', aliases: ['dataset:norm'])]
@@ -51,14 +54,47 @@ final class DatasetStageCommands
     private function run(SymfonyStyle $io, string $ref, Stage $stage, string $core, bool $allCores): int
     {
         $isDataset = str_contains($ref, '/');
+        if ($isDataset) {
+            return $this->convert->convert(
+                $io,
+                dataset: $ref,
+                stage: $stage->value,
+                core: $core,
+                allCores: $allCores,
+            );
+        }
 
-        return $this->convert->convert(
-            $io,
-            dataset: $isDataset ? $ref : null,
-            stage: $stage->value,
-            core: $core,
-            allCores: $allCores,
-            provider: $isDataset ? null : $ref,
-        );
+        $provider = strtolower(trim($ref));
+        $datasetInfos = $this->datasets->createQueryBuilder('d')
+            ->andWhere('d.datasetKey LIKE :prefix')
+            ->setParameter('prefix', $provider . '/%')
+            ->orderBy('d.datasetKey', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        if ($datasetInfos === []) {
+            $io->warning(sprintf('No datasets registered for provider "%s". Run dataset:scan first.', $provider));
+            return 0;
+        }
+
+        $failed = 0;
+        foreach ($datasetInfos as $datasetInfo) {
+            if (!$datasetInfo instanceof DatasetInfo) {
+                continue;
+            }
+            $io->section($datasetInfo->datasetKey);
+            $result = $this->convert->convert(
+                $io,
+                dataset: $datasetInfo->datasetKey,
+                stage: $stage->value,
+                core: $core,
+                allCores: $allCores,
+            );
+            if ($result !== 0) {
+                $failed++;
+            }
+        }
+
+        return $failed > 0 ? 1 : 0;
     }
 }
