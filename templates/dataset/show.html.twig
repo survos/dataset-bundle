@@ -17,7 +17,6 @@
         <div class="text-secondary"><code>{{ dataset.datasetKey }}</code></div>
       </div>
       <div class="col-auto d-flex gap-2">
-        <a class="btn btn-sm btn-outline-secondary" href="{{ path('_api_/dataset_infos/{datasetKey}_get', {datasetKey: dataset.datasetKey}) }}" target="_blank">API</a>
         {% if route_exists('meili_insta') %}
           <a class="btn btn-sm btn-outline-primary" href="{{ path('meili_insta', {indexName: 'md_' ~ dataset.provider}) }}" target="_blank">Search</a>
         {% endif %}
@@ -80,6 +79,80 @@
         </div>
       </div>
     </div>
+
+    {% if stages is defined %}
+    <div class="row g-3 mt-1">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header d-flex align-items-baseline gap-2">
+            <h3 class="card-title mb-0">Stages &amp; files</h3>
+            <span class="text-secondary small">what exists on this machine — counts &amp; facets come from the <code>.jsonl.db</code> sidecar</span>
+          </div>
+          <div class="card-body">
+            {% set kindColors = {data: 'green', sidecar: 'azure', index: 'cyan', profile: 'orange', meta: 'secondary', other: 'secondary'} %}
+            <div class="row g-3">
+              {% for stage in stages %}
+                <div class="col-md-6 col-xl-4">
+                  <div class="card card-sm h-100{{ not stage.exists or stage.fileCount == 0 ? ' opacity-75' : '' }}">
+                    <div class="card-header py-2">
+                      <div class="d-flex align-items-center gap-2 w-100">
+                        <span class="fw-bold text-capitalize">{{ stage.stage }}</span>
+                        <code class="small text-muted">{{ stage.dir }}/</code>
+                        <span class="ms-auto small text-muted">
+                          {%- if stage.fileCount %}{{ stage.fileCount }} file{{ stage.fileCount == 1 ? '' : 's' }} · {{ stage.totalSize }}{% endif -%}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="card-body py-2">
+                      {% if not stage.exists %}
+                        <div class="text-muted small fst-italic">not present</div>
+                      {% elseif stage.cores is empty %}
+                        <div class="text-muted small fst-italic">empty</div>
+                      {% else %}
+                        {% for core in stage.cores %}
+                          <div class="{{ not loop.last ? 'mb-2 pb-2 border-bottom' : '' }}">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                              <span class="fw-semibold">{{ core.core }}</span>
+                              {% if core.recordCount is not null %}
+                                <span class="badge bg-blue-lt">{{ core.recordCount|number_format }} rows</span>
+                              {% endif %}
+                              {% if core.fieldCount is not null %}
+                                <span class="badge bg-purple-lt">{{ core.fieldCount }} fields</span>
+                              {% endif %}
+                              {% if core.indexedKeys %}
+                                <span class="badge bg-teal-lt" title="primary keys indexed for offset lookup">{{ core.indexedKeys|number_format }} indexed</span>
+                              {% endif %}
+                              {% if not core.hasSidecar %}
+                                <span class="badge bg-secondary-lt" title="no SQL sidecar — run dataset:profile">no sidecar</span>
+                              {% endif %}
+                            </div>
+                            <div class="d-flex flex-wrap gap-1 mt-1">
+                              {% for file in core.files %}
+                                <span class="badge bg-{{ kindColors[file.kind] ?? 'secondary' }}-lt" title="{{ file.kind }}">
+                                  {{ file.name }} <span class="opacity-75">· {{ file.size }}</span>
+                                </span>
+                              {% endfor %}
+                            </div>
+                            {% if core.facetFields is not empty %}
+                              <div class="small text-muted mt-1">
+                                facets:
+                                {%- for f in core.facetFields|slice(0, 12) %} <code>{{ f }}</code>{{ not loop.last ? ',' }}{% endfor %}
+                                {%- if core.facetFields|length > 12 %} +{{ core.facetFields|length - 12 }} more{% endif %}
+                              </div>
+                            {% endif %}
+                          </div>
+                        {% endfor %}
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

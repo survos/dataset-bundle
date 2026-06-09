@@ -7,6 +7,7 @@ use Survos\DatasetBundle\Entity\Candidate;
 use Survos\DatasetBundle\Entity\DatasetInfo;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\DatasetBundle\Repository\ProviderRepository;
+use Survos\DatasetBundle\Service\DatasetStageInventory;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -16,6 +17,7 @@ final class ProviderController extends AbstractController
     public function __construct(
         private readonly ProviderRepository $providerRepository,
         private readonly DatasetInfoRepository $datasetInfoRepository,
+        private readonly DatasetStageInventory $stageInventory,
         private readonly array $enabledProviders = [],
     ) {
     }
@@ -69,6 +71,7 @@ final class ProviderController extends AbstractController
         return $this->render('@SurvosDatasetBundle/dataset/show.html.twig', [
             'dataset' => $dataset,
             'provider' => $dataset->providerEntity,
+            'stages' => $this->stageInventory->forDatasetKey($datasetKey),
         ]);
     }
 

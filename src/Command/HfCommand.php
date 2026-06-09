@@ -29,8 +29,19 @@ final class HfCommand
 {
     public function __construct(
         private readonly DataPaths $paths,
-        private readonly HfHubClient $hub,
+        // Optional: present whenever the bundle registers HfHubClient (it autowires from the
+        // HTTP client + HF_TOKEN). Nullable so the command still loads where HF is stripped out.
+        private readonly ?HfHubClient $hub = null,
     ) {
+    }
+
+    private function hub(SymfonyStyle $io): ?HfHubClient
+    {
+        if ($this->hub === null) {
+            $io->error('HuggingFace support is not available (HfHubClient is not registered).');
+        }
+
+        return $this->hub;
     }
 
     #[AsCommand('hf:pull', 'Pull a HuggingFace dataset into APP_DATA_DIR/archive/<provider>')]
@@ -54,6 +65,9 @@ final class HfCommand
     ): int {
         if (null === $provider || '' === $provider) {
             $io->error('Provide a provider, e.g. hf:pull dc');
+            return Command::FAILURE;
+        }
+        if (null === $this->hub($io)) {
             return Command::FAILURE;
         }
         $repo ??= 'museado/' . $provider;
@@ -134,6 +148,9 @@ final class HfCommand
     ): int {
         if (null === $provider || '' === $provider) {
             $io->error('Provide a provider, e.g. hf:push dc');
+            return Command::FAILURE;
+        }
+        if (null === $this->hub($io)) {
             return Command::FAILURE;
         }
         $repo ??= 'museado/' . $provider;

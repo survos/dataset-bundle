@@ -20,6 +20,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Scans APP_DATA_DIR for 00_meta/dataset.yaml files and populates DatasetInfo.
@@ -38,6 +39,8 @@ final class ScanDatasetsCommand extends DataCommand
 {
     /** @param list<string> $enabledProviders */
     public function __construct(
+        // The registry lives in the bundle's private sqlite EM, not the app default.
+        #[Autowire(service: 'doctrine.orm.dataset_entity_manager')]
         private readonly EntityManagerInterface $em,
         private readonly ArtifactRepository $artifactRepository,
         private readonly ProviderRepository $providerRepo,

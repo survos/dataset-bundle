@@ -176,6 +176,59 @@ final class DataPaths
         return $this->providerArchiveFile($parsed['provider'], $parsed['code'] . '/' . ltrim($file, '/'));
     }
 
+    /** The dataset's durable vault directory: vault/<provider>/<code>. */
+    public function vaultDatasetDir(string $datasetKey): string
+    {
+        $parsed = $this->parseDatasetRef($datasetKey);
+
+        return $this->providerArchiveRoot($parsed['provider']) . '/' . $parsed['code'];
+    }
+
+    /**
+     * Materialize the `_raw` stage as a **tier portal**: a symlink from
+     * work/<p>/<c>/_raw → vault/<p>/<c>. Raw written through the `_raw` path then lands in the
+     * vault (the canonical, durable home), and `rm -rf work/<p>/<c>` only drops the link, never the
+     * raw bytes. See md/docs/data-layout.md.
+     *
+     * Safe & idempotent: creates the vault dir, points (or re-points) the symlink. A pre-existing
+     * *non-empty real* `_raw` directory is left untouched — converting that is an explicit migration,
+     * not a silent side effect of asking for the path.
+     */
+    public function ensureRawPortal(string $datasetKey): string
+    {
+        $rawDir   = $this->datasetDir($datasetKey) . '/' . Stage::Raw->dir();
+        $vaultDir = $this->vaultDatasetDir($datasetKey);
+
+        $fs = $this->filesystem();
+        $fs->mkdir($vaultDir);
+        $fs->mkdir(dirname($rawDir)); // work/<p>/<c>
+
+        if (is_link($rawDir)) {
+            if (realpath($rawDir) === realpath($vaultDir)) {
+                return $rawDir; // already the correct portal
+            }
+            $fs->remove($rawDir); // wrong target → re-point
+        } elseif (is_dir($rawDir)) {
+            if (!$this->isDirEmpty($rawDir)) {
+                return $rawDir; // legacy real raw dir — leave for explicit migration
+            }
+            $fs->remove($rawDir);
+        }
+
+        $fs->symlink($vaultDir, $rawDir);
+
+        return $rawDir;
+    }
+
+    private function isDirEmpty(string $dir): bool
+    {
+        foreach (new \FilesystemIterator($dir) as $_) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function folioFile(string $datasetKey, string $extension = 'folio', bool $create = false): string
     {
         $parsed = $this->parseDatasetRef($datasetKey);
@@ -229,6 +282,10 @@ final class DataPaths
         $path = $this->datasetDir($datasetKey) . '/' . $resolved->dir();
 
         if ($create) {
+            // Raw is a tier portal: materialize _raw as a symlink to the vault, not a real dir.
+            if ($resolved === Stage::Raw) {
+                return $this->ensureRawPortal($datasetKey);
+            }
             $this->filesystem()->mkdir($path);
         }
 

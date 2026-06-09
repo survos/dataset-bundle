@@ -3,22 +3,12 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle;
 
-use Survos\DatasetBundle\Command\DataBrowseCommand;
-use Survos\DatasetBundle\Command\DataDiagCommand;
-use Survos\DatasetBundle\Command\DataHeadCommand;
-use Survos\DatasetBundle\Command\DataPathCommand;
-use Survos\DatasetBundle\Command\DataPurgeCommand;
-use Survos\DatasetBundle\Command\DatasetIterateCommand;
-use Survos\DatasetBundle\Command\DatasetStageCommands;
-use Survos\DatasetBundle\Command\ScanDatasetsCommand;
-use Survos\DatasetBundle\Event\DatasetIterateEvent;
 use Survos\DatasetBundle\Event\DatasetArtifactUpdatedEvent;
 use Survos\DatasetBundle\EventListener\SubjectImportListener;
 use Survos\DatasetBundle\Service\DatasetIntlService;
 use Survos\DatasetBundle\Service\PhraseExtractor;
 use Survos\DatasetBundle\Context\DatasetContext;
 use Survos\DatasetBundle\Context\DatasetResolver;
-use Survos\DatasetBundle\Controller\ProviderController;
 use Survos\DatasetBundle\Doctrine\SqliteWalMiddleware;
 use Survos\DatasetBundle\EventListener\DatasetContextConsoleListener;
 use Survos\DatasetBundle\EventListener\DatasetRegistryArtifactListener;
@@ -31,8 +21,9 @@ use Survos\DatasetBundle\Repository\CandidateRepository;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\DatasetBundle\Repository\ProviderRepository;
 use Survos\DatasetBundle\Menu\DataMenuSubscriber;
-use Survos\DatasetBundle\Twig\Components\ProviderListComponent;
 use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DatasetBundle\Service\HfHubClient;
+use Survos\DatasetBundle\Service\DatasetStageInventory;
 use Survos\DatasetBundle\Service\DatasetRegistryUpdater;
 use Survos\DatasetBundle\Service\ProviderSnapshotCodec;
 use Survos\DatasetBundle\Service\SurvosDatasetPathsFactory;
@@ -96,6 +87,7 @@ final class SurvosDatasetBundle extends AbstractBundle
     {
         $this->captureRouteConfig($config);
         $container->parameters()->set('survos_dataset.registry_database_path', $config['registry_database_path']);
+        $container->parameters()->set('survos_dataset.providers', $config['providers']);
         $services = $container->services();
 
         $services->set(DataPaths::class)
@@ -113,6 +105,13 @@ final class SurvosDatasetBundle extends AbstractBundle
             ]);
 
         $services->set(ProviderSnapshotCodec::class)
+            ->autowire()
+            ->autoconfigure()
+            ->public();
+
+        // HuggingFace archive sync client (hf:pull / hf:push). Autowires from the HTTP client +
+        // %env(default::HF_TOKEN)%; HfCommand treats it as optional.
+        $services->set(HfHubClient::class)
             ->autowire()
             ->autoconfigure()
             ->public();
@@ -157,19 +156,21 @@ final class SurvosDatasetBundle extends AbstractBundle
             $services->alias(DatasetContextInterface::class, DatasetContext::class)->public();
         }
 
-        foreach ([DataDiagCommand::class, DataPathCommand::class, DataPurgeCommand::class, DataHeadCommand::class, DataBrowseCommand::class, DatasetIterateCommand::class, DatasetStageCommands::class] as $class) {
-            $services->set($class)
-                ->autowire()
-                ->autoconfigure()
-                ->public();
-        }
+        // Auto-register the attribute-tagged classes in src/Command, src/Controller and
+        // src/Twig/Components — the same PSR-4 + autoconfigure mechanism as
+        // Survos\Kit\AbstractSurvosBundle::loadExtension(): drop a class in the dir and it wires
+        // itself up. The provider allowlist is the only cross-cutting constructor arg, so it is
+        // bound once here; the dataset entity manager (the one genuinely special dependency — a
+        // private sqlite registry) is pulled in via an #[Autowire] attribute where needed.
+        $autoload = $services->defaults()->autowire()->autoconfigure()
+            ->bind('$enabledProviders', '%survos_dataset.providers%');
 
-        $services->set(ScanDatasetsCommand::class)
-            ->autowire()
-            ->autoconfigure()
-            ->public()
-            ->arg('$em', new \Symfony\Component\DependencyInjection\Reference('doctrine.orm.dataset_entity_manager'))
-            ->arg('$enabledProviders', $config['providers']);
+        foreach (['Command', 'Controller', 'Twig\\Components'] as $sub) {
+            $dir = $this->getPath() . '/src/' . str_replace('\\', '/', $sub) . '/';
+            if (is_dir($dir)) {
+                $autoload->load('Survos\\DatasetBundle\\' . $sub . '\\', $dir);
+            }
+        }
 
         if (class_exists(\Survos\AiWorkflowBundle\Entity\Subject::class)) {
             $services->set(SubjectImportListener::class)
@@ -230,19 +231,10 @@ final class SurvosDatasetBundle extends AbstractBundle
             ->public()
             ->tag('doctrine.repository_service');
 
-        $services->set(ProviderListComponent::class)
+        $services->set(DatasetStageInventory::class)
             ->autowire()
             ->autoconfigure()
-            ->public()
-            ->arg('$enabledProviders', $config['providers']);
-
-        if ($config['routes_enabled']) {
-            $services->set(ProviderController::class)
-                ->autowire()
-                ->autoconfigure()
-                ->public()
-                ->arg('$enabledProviders', $config['providers']);
-        }
+            ->public();
 
         if ($config['routes_enabled'] && class_exists(\Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber::class)) {
             $services->set(DataMenuSubscriber::class)
@@ -277,6 +269,48 @@ final class SurvosDatasetBundle extends AbstractBundle
         $templateDir = dirname(__DIR__) . '/templates';
 
         if ($builder->hasExtension('doctrine')) {
+            // This bundle adds a SECOND Doctrine connection ('dataset', pdo_sqlite) and
+            // entity manager. Once a second connection exists, Doctrine no longer infers
+            // the default from the dbal `url` shorthand — it falls back to the first
+            // declared connection, which would silently make this sqlite registry the
+            // app's default connection/EM. Rather than guess, fail loud: require the app
+            // to pin the default explicitly. (Prepended config is lowest priority, so we
+            // cannot safely set it for them without risking the wrong choice.)
+            $hasDefaultConnection = false;
+            $hasDefaultEm = false;
+            foreach ($builder->getExtensionConfig('doctrine') as $doctrineConfig) {
+                if (!is_array($doctrineConfig)) {
+                    continue;
+                }
+                if (!empty($doctrineConfig['dbal']['default_connection'])) {
+                    $hasDefaultConnection = true;
+                }
+                if (!empty($doctrineConfig['orm']['default_entity_manager'])) {
+                    $hasDefaultEm = true;
+                }
+            }
+
+            if (!$hasDefaultConnection || !$hasDefaultEm) {
+                throw new \LogicException(
+                    "SurvosDatasetBundle registers a second Doctrine connection ('dataset', pdo_sqlite) and "
+                    . "entity manager, which makes the default ambiguous. Pin them explicitly in "
+                    . "config/packages/doctrine.yaml so your app DB stays the default:\n\n"
+                    . "    doctrine:\n"
+                    . "        dbal:\n"
+                    . "            default_connection: default\n"
+                    . "            connections:\n"
+                    . "                default:\n"
+                    . "                    url: '%env(resolve:DATABASE_URL)%'\n"
+                    . "        orm:\n"
+                    . "            default_entity_manager: default\n"
+                    . "            entity_managers:\n"
+                    . "                default:\n"
+                    . "                    connection: default\n"
+                    . "                    mappings: { App: { ... } }\n\n"
+                    . "Without this the 'dataset' sqlite connection silently becomes the app default."
+                );
+            }
+
             $builder->prependExtensionConfig('doctrine', [
                 'dbal' => [
                     'connections' => [

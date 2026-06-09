@@ -14,15 +14,15 @@
         }
     },
     "require": {
-        "php": "^8.4",
+        "php": "^8.5",
         "doctrine/dbal": "^4.2",
-        "symfony/framework-bundle": "^8.0",
-        "symfony/dependency-injection": "^8.0",
-        "symfony/config": "^8.0",
-        "symfony/serializer": "^8.0",
-        "symfony/filesystem": "^8.0",
-        "symfony/console": "^8.0",
-        "symfony/ux-twig-component": "^2.0|^3.0",
+        "symfony/framework-bundle": "^8.1",
+        "symfony/dependency-injection": "^8.1",
+        "symfony/config": "^8.1",
+        "symfony/serializer": "^8.1",
+        "symfony/filesystem": "^8.1",
+        "symfony/console": "^8.1",
+        "symfony/ux-twig-component": "^3",
         "survos/data-contracts": "^2.5",
         "survos/lingua-contracts": "^2.5",
         "survos/lingua-core": "^2.5",
@@ -32,7 +32,7 @@
     "require-dev": {
         "roave/security-advisories": "dev-latest",
         "phpunit/phpunit": "^13.0",
-        "symfony/yaml": "^8.0",
+        "symfony/yaml": "^8.1",
         "survos/import-bundle": "^2.5",
         "survos/ai-workflow-bundle": "^2.5"
     },
