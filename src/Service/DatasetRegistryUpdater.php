@@ -41,8 +41,13 @@ final class DatasetRegistryUpdater
         $info = new DatasetInfo($datasetKey);
         $this->entityManager->persist($info);
         $this->populateFromMeta($info, $meta, $paths->metaJson);
-        $this->attachProvider($info);
+        $provider = $this->attachProvider($info);
         $this->updateStatus($info);
+        $this->entityManager->flush();
+
+        // Keep the provider/dataset tables in sync without a separate dataset:scan: the
+        // new DatasetInfo now exists, so recompute the provider's cached dataset count.
+        $this->refreshProviderCount($provider);
         $this->entityManager->flush();
 
         return $info;
@@ -273,12 +278,24 @@ final class DatasetRegistryUpdater
         return $summary;
     }
 
-    private function attachProvider(DatasetInfo $info): void
+    private function attachProvider(DatasetInfo $info): Provider
     {
         $provider = $this->providerRepository->findOneByCode($info->provider()) ?? new Provider($info->provider());
         $provider->setSyncedAt(new \DateTime());
         $this->entityManager->persist($provider);
         $info->setProviderEntity($provider);
+
+        return $provider;
+    }
+
+    /**
+     * Recompute the provider's cached dataset count from the registry — mirrors
+     * dataset:scan Phase 4, so an import that creates a dataset keeps the count current.
+     */
+    private function refreshProviderCount(Provider $provider): void
+    {
+        $provider->setDatasetCount($this->datasetRepository->count(['providerEntity' => $provider]));
+        $provider->setSyncedAt(new \DateTime());
     }
 
     private function updateStatus(DatasetInfo $info): void

@@ -58,8 +58,9 @@ final class DatasetStageCommands
         #[Option('Fan out over every dataset for this provider (e.g. "smith")')] ?string $provider = null,
         #[Option('Core filename stem')] string $core = 'obj',
         #[Option('Convert every raw core for the dataset')] bool $allCores = false,
+        #[Option('Max records to normalize (per dataset/core)')] ?int $limit = null,
     ): int {
-        return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core, $allCores);
+        return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core, $allCores, $limit);
     }
 
     #[AsCommand('dataset:assemble', 'Assemble the folio-input bundle (→ _folio/)')]
@@ -69,8 +70,9 @@ final class DatasetStageCommands
         #[Option('Fan out over every dataset for this provider (e.g. "smith")')] ?string $provider = null,
         #[Option('Core filename stem')] string $core = 'obj',
         #[Option('Convert every raw core for the dataset')] bool $allCores = false,
+        #[Option('Max records to assemble (per dataset/core)')] ?int $limit = null,
     ): int {
-        return $this->convertStage($io, $ref, $provider, Stage::Enrich, $core, $allCores);
+        return $this->convertStage($io, $ref, $provider, Stage::Enrich, $core, $allCores, $limit);
     }
 
     /**
@@ -125,7 +127,7 @@ final class DatasetStageCommands
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
-    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores): int
+    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $limit = null): int
     {
         $keys = $this->resolveDatasetKeys($io, $ref, $provider);
         if ($keys === null) {
@@ -139,6 +141,7 @@ final class DatasetStageCommands
             }
             $result = $this->convert->convert(
                 $io,
+                limit: $limit,
                 dataset: $datasetKey,
                 stage: $stage->value,
                 core: $core,

@@ -30,7 +30,6 @@
         "zenstruck/bytes": "^1.1"
     },
     "require-dev": {
-        "roave/security-advisories": "dev-latest",
         "phpunit/phpunit": "^13.0",
         "symfony/yaml": "^8.1",
         "survos/import-bundle": "^2.5",
