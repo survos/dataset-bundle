@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  php:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install runner packages
+        run: sudo apt-get update && sudo apt-get install -y libsodium23
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: zip, sqlite3, pdo_sqlite
+          coverage: none
+          tools: phpstan
+
+      - name: Validate Composer metadata
+        run: composer validate --strict --no-check-lock
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Lint PHP files
+        run: find src tests -name '*.php' -print0 | xargs -0 -n 1 php -l
+
+      - name: Run tests
+        run: composer test
+
+      - name: Run PHPStan
+        run: phpstan analyse --no-progress

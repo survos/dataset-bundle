@@ -31,8 +31,10 @@ final class DatasetIntlService
     public function __construct(
         private readonly DataPaths $paths,
         private readonly LinguaClient $lingua,
-        private readonly ?LoggerInterface $logger = null,
-    ) {}
+        ?LoggerInterface $logger = null,
+    ) {
+        unset($logger);
+    }
 
     #[AsCommand('dataset:intl:pull', 'fetch translations for a dataset from the Lingua server into 25_intl/tr.<locale>.jsonl')]
     public function pull(
@@ -62,7 +64,7 @@ final class DatasetIntlService
         $codes = [];
         foreach ($sourceFiles as $file) {
             foreach (JsonlReader::open($file) as $row) {
-                if (is_array($row) && isset($row['code'])) {
+                if (isset($row['code'])) {
                     $codes[(string) $row['code']] = true;
                 }
             }
@@ -74,7 +76,7 @@ final class DatasetIntlService
             ['dataset' => $dataset],
             ['source phrase codes' => (string) count($codes)],
             ['target locales' => implode(', ', $targetLocales)],
-            ['lingua server' => $this->lingua->baseUri ?? '(unset)'],
+            ['lingua server' => $this->lingua->baseUri],
         );
 
         if ($codes === []) {
@@ -90,7 +92,7 @@ final class DatasetIntlService
             $written = 0;
             try {
                 foreach ($map as $code => $text) {
-                    if (!is_string($text) || $text === '') {
+                    if ($text === '') {
                         continue;
                     }
                     $writer->write(['code' => $code, 'locale' => $locale, 'text' => $text]);

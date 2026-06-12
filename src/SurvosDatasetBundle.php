@@ -31,11 +31,14 @@ use Survos\ImportBundle\Event\ImportConvertFinishedEvent;
 use Survos\ImportBundle\Contract\DatasetContextInterface;
 use Survos\ImportBundle\Contract\DatasetPathsFactoryInterface;
 use Survos\Kit\Traits\HasConfigurableRoutes;
+use Survos\MeiliBundle\SurvosMeiliBundle;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Kernel\RequiredBundle;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 
+#[RequiredBundle(SurvosMeiliBundle::class, ignoreOnInvalid: true)]
 final class SurvosDatasetBundle extends AbstractBundle
 {
     use HasConfigurableRoutes;
@@ -279,9 +282,6 @@ final class SurvosDatasetBundle extends AbstractBundle
             $hasDefaultConnection = false;
             $hasDefaultEm = false;
             foreach ($builder->getExtensionConfig('doctrine') as $doctrineConfig) {
-                if (!is_array($doctrineConfig)) {
-                    continue;
-                }
                 if (!empty($doctrineConfig['dbal']['default_connection'])) {
                     $hasDefaultConnection = true;
                 }

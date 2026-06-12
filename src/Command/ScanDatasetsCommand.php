@@ -165,7 +165,7 @@ final class ScanDatasetsCommand extends DataCommand
                     $datasetKey = $providerCode . '/' . substr($datasetKey, strlen($providerCode) + 1);
                 }
 
-                $datasetProvider = explode('/', $datasetKey, 2)[0] ?? '';
+                $datasetProvider = explode('/', $datasetKey, 2)[0];
                 if ($datasetProvider !== $providerCode) {
                     $io->warning(sprintf('Skipping %s (datasetKey provider "%s" != dir provider "%s")', $metaFile, $datasetProvider, $providerCode));
                     continue;
@@ -222,7 +222,7 @@ final class ScanDatasetsCommand extends DataCommand
             // Path is provider/dataset.folio - strip extension to get dataset key.
             $relative   = substr($dbFile, strlen($folioPath) + 1);
             $datasetKey = substr($relative, 0, -strlen('.folio'));
-            $folioProviderCode = explode('/', $datasetKey, 2)[0] ?? '';
+            $folioProviderCode = explode('/', $datasetKey, 2)[0];
             if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
                 continue;
             }
@@ -282,7 +282,7 @@ final class ScanDatasetsCommand extends DataCommand
         foreach ($folioArchives as $archiveFile) {
             $relative = substr($archiveFile, strlen($folioPath) + 1);
             $datasetKey = substr($relative, 0, -strlen('.folio'));
-            $folioProviderCode = explode('/', $datasetKey, 2)[0] ?? '';
+            $folioProviderCode = explode('/', $datasetKey, 2)[0];
             if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
                 continue;
             }
@@ -359,7 +359,7 @@ final class ScanDatasetsCommand extends DataCommand
                     $info->datasetKey,
                     $info->label ?? '-',
                     $artifact?->rowCount ? number_format($artifact->rowCount) : '?',
-                    round(($artifact?->sizeBytes ?? 0) / 1024) . ' KB',
+                    round(($artifact->sizeBytes ?? 0) / 1024) . ' KB',
                     $info->status,
                 ];
             }
@@ -387,7 +387,7 @@ final class ScanDatasetsCommand extends DataCommand
         }
 
         $schemaTool = new SchemaTool($this->em);
-        $schemaTool->updateSchema($metadata, true);
+        $schemaTool->updateSchema($metadata);
     }
     /** @return array<string,string> providerCode => absolutePath */
     private function listProviderDirs(string $root, ?string $providerFilter): array
@@ -626,8 +626,8 @@ final class ScanDatasetsCommand extends DataCommand
             ],
         ];
 
-        $locationDistinct = max(array_map(static fn(array $field): int => (int) ($field['distinct'] ?? 0), $summary['candidates']['location']) ?: [0]);
-        $typeDistinct = max(array_map(static fn(array $field): int => (int) ($field['distinct'] ?? 0), $summary['candidates']['type']) ?: [0]);
+        $locationDistinct = max(array_map(static fn(array $field): int => (int) $field['distinct'], $summary['candidates']['location']) ?: [0]);
+        $typeDistinct = max(array_map(static fn(array $field): int => (int) $field['distinct'], $summary['candidates']['type']) ?: [0]);
         $summary['preferredHierarchy'] = ($locationDistinct <= 2 && $typeDistinct >= 3) ? 'type' : 'location';
 
         return $summary;
@@ -647,7 +647,7 @@ final class ScanDatasetsCommand extends DataCommand
                 continue;
             }
             $summary[$name] = [
-                'distinct' => (int) ($field['distinct'] ?? 0),
+                'distinct' => (int) $field['distinct'],
                 'nulls' => (int) ($field['nulls'] ?? 0),
                 'types' => array_values(array_filter($field['types'] ?? [], static fn(mixed $value): bool => is_string($value) && $value !== '')),
             ];
@@ -683,7 +683,7 @@ final class ScanDatasetsCommand extends DataCommand
     }
 
     /**
-     * @return array{rowCount:int|null, cores:list<array{code:string,label:?string,rowCount:int}>}
+     * @return array{rowCount:int|null, cores:list<array{code:string,label:?string,rowCount:int}>, coreCounts:array<string,int>, dtoCounts:?array<string,int>}
      */
     private function summarizeFolio(string $dbFile): array
     {

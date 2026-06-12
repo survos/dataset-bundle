@@ -21,7 +21,7 @@ final class FieldMapService
     /** @var array<string, mixed> */
     private array $map;
 
-    public function __construct(private readonly string $mapFile)
+    public function __construct(string $mapFile)
     {
         $this->map = Yaml::parseFile($mapFile) ?? [];
     }

@@ -33,15 +33,26 @@
         "phpunit/phpunit": "^13.0",
         "symfony/yaml": "^8.1",
         "survos/import-bundle": "^2.5",
-        "survos/ai-workflow-bundle": "^2.5"
+        "survos/ai-workflow-bundle": "^2.5",
+        "api-platform/core": "^4.3",
+        "survos/folio-bundle": "^2.5",
+        "survos/tabler-bundle": "^2.5",
+        "survos/lingua-bundle": "^2.5",
+        "survos/meili-bundle": "^2.5",
+        "meilisearch/meilisearch-php": "dev-main"
     },
     "suggest": {
-        "survos/ai-workflow-bundle": "Wires DatasetIterateRowEvent → Subject creation for AI workflow pipelines"
+        "survos/ai-workflow-bundle": "Wires DatasetIterateRowEvent \u2192 Subject creation for AI workflow pipelines"
     },
     "prefer-stable": true,
     "extra": {
         "symfony": {
             "require": "^8.1"
         }
+    },
+    "scripts": {
+        "phpunit": "phpunit -c phpunit.xml.dist --no-coverage",
+        "test": "@phpunit",
+        "phpstan": "phpstan analyse --no-progress"
     }
 }

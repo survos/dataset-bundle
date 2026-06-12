@@ -6,14 +6,15 @@ namespace Survos\DatasetBundle\Service;
 use Survos\DatasetBundle\Dto\ProviderSnapshot;
 use Survos\DatasetBundle\Entity\Provider;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
-use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
 final class ProviderSnapshotCodec
 {
     private const GROUP = 'provider:snapshot';
 
     public function __construct(
-        private readonly SerializerInterface $serializer,
+        private readonly NormalizerInterface&DenormalizerInterface $serializer,
     ) {}
 
     public function toSnapshot(Provider $provider): ProviderSnapshot

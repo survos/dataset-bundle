@@ -130,12 +130,12 @@ final class Candidate
     public function __construct(string $candidateKey)
     {
         $this->candidateKey = $candidateKey;
-        $this->providerCode = explode('/', $candidateKey, 2)[0] ?? $candidateKey;
+        $this->providerCode = explode('/', $candidateKey, 2)[0];
     }
 
     public function provider(): string
     {
-        return explode('/', $this->candidateKey, 2)[0] ?? $this->candidateKey;
+        return explode('/', $this->candidateKey, 2)[0];
     }
 
     public function code(): string

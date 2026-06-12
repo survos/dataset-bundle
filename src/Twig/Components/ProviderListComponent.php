@@ -6,15 +6,12 @@ namespace Survos\DatasetBundle\Twig\Components;
 use Survos\DatasetBundle\Repository\CandidateRepository;
 use Survos\DatasetBundle\Repository\ProviderRepository;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
-use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\UX\TwigComponent\Attribute\AsTwigComponent;
-use Symfony\UX\TwigComponent\Attribute\Mount;
 use Symfony\Component\Routing\RouterInterface;
 
 #[AsTwigComponent('ProviderList')]
 final class ProviderListComponent
 {
-    #[Mount]
     public array $providers = [];
 
     public function __construct(
@@ -22,7 +19,6 @@ final class ProviderListComponent
         private readonly CandidateRepository $candidateRepository,
         private readonly RouterInterface $router,
         private readonly array $enabledProviders = [],
-        private readonly ?MeiliService $meiliService = null,
         private readonly ?IndexInfoRepository $indexInfoRepository = null,
     ) {
     }
@@ -36,10 +32,9 @@ final class ProviderListComponent
         foreach ($providers as $provider) {
             $code = $provider->getCode();
 
-            // Get Meilisearch indexes for this provider by matching indexName prefix
-            // e.g., md_dc, md_dccoll, md_smithobj all belong to provider "dc" or "smith"
+            // Get Meilisearch indexes for this provider by matching indexName prefix.
             $allIndexes = $this->indexInfoRepository?->findAll() ?? [];
-            $indexInfos = array_filter($allIndexes, fn($idx) =>
+            $indexInfos = array_filter($allIndexes, static fn(object $idx): bool =>
                 str_starts_with($idx->indexName, 'md_' . $code) ||
                 $idx->indexName === 'md_' . $code
             );
