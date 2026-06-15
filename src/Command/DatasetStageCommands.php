@@ -56,11 +56,14 @@ final class DatasetStageCommands
         SymfonyStyle $io,
         #[Argument('Dataset key (provider/code) or a bare code (e.g. "victoria")')] ?string $ref = null,
         #[Option('Fan out over every dataset for this provider (e.g. "smith")')] ?string $provider = null,
-        #[Option('Core filename stem')] string $core = 'obj',
-        #[Option('Convert every raw core for the dataset')] bool $allCores = false,
+        #[Option('Normalize only this core stem (default: every core in _raw)')] ?string $core = null,
+        #[Option('Convert every raw core for the dataset (default when --core is omitted)')] bool $allCores = false,
         #[Option('Max records to normalize (per dataset/core)')] ?int $limit = null,
     ): int {
-        return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core, $allCores, $limit);
+        // Default to discovering every core in _raw; --core restricts to one (the exception).
+        $allCores = $allCores || $core === null;
+
+        return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core ?? 'obj', $allCores, $limit);
     }
 
     #[AsCommand('dataset:assemble', 'Assemble the folio-input bundle (→ _folio/)')]

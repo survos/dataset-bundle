@@ -16,10 +16,9 @@ class DataMenuSubscriber extends AbstractAdminMenuSubscriber
 {
     protected function getLabel(): string { return 'Data'; }
 
-    protected function getBrowseRoute(): ?string
-    {
-        return 'data_bundle_provider_index';
-    }
+    // Use the default survos_admin_browse (/admin/browse/{code}) so each resource
+    // links to its OWN api-grid page. Overriding this to data_bundle_provider_index
+    // (which has no {code}) collapsed every link onto the providers page.
 
     protected function getResourceClasses(): array
     {

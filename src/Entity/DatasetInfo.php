@@ -37,7 +37,13 @@ use Symfony\Component\Serializer\Attribute\Groups;
 #[ApiResource(
     operations: [
         new GetCollection(uriTemplate: '/dataset_infos', normalizationContext: ['groups' => ['dataset:read']]),
-        new Get(uriTemplate: '/dataset_infos/{datasetKey}', normalizationContext: ['groups' => ['dataset:read']]),
+        // datasetKey contains a slash (e.g. "nara/rg_105"); without the `.+` requirement
+        // Symfony can neither match nor GENERATE the IRI, breaking serialization/browsing.
+        new Get(
+            uriTemplate: '/dataset_infos/{datasetKey}',
+            requirements: ['datasetKey' => '.+'],
+            normalizationContext: ['groups' => ['dataset:read']],
+        ),
     ],
     normalizationContext: ['groups' => ['dataset:read']],
 )]

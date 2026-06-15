@@ -168,6 +168,23 @@ final class DataPaths
         return $this->providerArchiveRoot($providerId) . '/' . $relativePath;
     }
 
+    /**
+     * Provider-level acquired source pages — listing pages, API responses, HTML
+     * captures — durable in the vault: vault/<provider>/_pages. This is the
+     * "acquire" (provider:*:vault) output; raw cores are derived from it.
+     *
+     * Created lazily (only pass $create=true when actually about to write).
+     */
+    public function pagesDir(string $providerId, bool $create = false): string
+    {
+        $dir = $this->providerArchiveRoot($providerId) . '/_pages';
+        if ($create) {
+            $this->filesystem()->mkdir($dir);
+        }
+
+        return $dir;
+    }
+
     /** Canonical durable raw JSONL artifact: vault/<provider>/<code>/<core>.jsonl[.gz]. */
     public function providerRawFile(string $datasetKey, string $file = 'obj.jsonl.gz'): string
     {
