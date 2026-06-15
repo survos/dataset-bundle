@@ -61,7 +61,6 @@ final class DatasetRegistryUpdater
     ): DatasetInfo {
         $info = $this->requireDataset($datasetKey);
 
-        $info->normalizedPath = is_file($jsonlPath) ? $jsonlPath : null;
         $info->profilePath = is_file($profilePath) ? $profilePath : null;
         $info->normalizedCount = $recordCount;
         $info->lastNormalized = new \DateTimeImmutable();
@@ -197,9 +196,6 @@ final class DatasetRegistryUpdater
 
         $rawFile = $paths->rawFile('obj.jsonl');
         $info->rawPath = is_file($rawFile) ? $rawFile : null;
-
-        $normFile = $paths->normalizeFile('obj.jsonl');
-        $info->normalizedPath = is_file($normFile) ? $normFile : null;
 
         $profileFile = $paths->profileFile('obj.profile.json');
         $info->profilePath = is_file($profileFile) ? $profileFile : null;

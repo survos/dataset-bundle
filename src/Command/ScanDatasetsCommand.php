@@ -520,9 +520,6 @@ final class ScanDatasetsCommand extends DataCommand
         $rawFile = $paths->rawFile('obj.jsonl');
         $info->rawPath        = is_file($rawFile) ? $rawFile : null;
 
-        $normFile = $paths->normalizeFile('obj.jsonl');
-        $info->normalizedPath = is_file($normFile) ? $normFile : null;
-
         $profFile = $paths->profileFile('obj.profile.json');
         $info->profilePath    = is_file($profFile) ? $profFile : null;
 

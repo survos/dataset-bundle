@@ -114,9 +114,6 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
     public ?string $rawPath = null;       // 05_raw/obj.jsonl
 
     #[ORM\Column(nullable: true)]
-    public ?string $normalizedPath = null; // 20_normalize/obj.jsonl
-
-    #[ORM\Column(nullable: true)]
     public ?string $profilePath = null;   // 21_profile/obj.profile.json
 
     // ── Pipeline status ───────────────────────────────────────────────────────
@@ -239,7 +236,7 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
     }
 
     public function hasRaw(): bool        { return $this->rawPath !== null; }
-    public function hasNormalized(): bool { return $this->normalizedPath !== null; }
+    public function hasNormalized(): bool { return ($this->normalizedCount ?? 0) >= 1; }
     public function hasProfile(): bool    { return $this->profilePath !== null; }
 
     public function hasArtifact(string $type): bool
@@ -282,6 +279,6 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
 
     public function isReadyForMeili(): bool
     {
-        return $this->hasNormalized() && $this->normalizedCount >= 1;
+        return $this->hasNormalized();
     }
 }
