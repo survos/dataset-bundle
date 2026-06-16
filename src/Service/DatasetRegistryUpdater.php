@@ -92,7 +92,10 @@ final class DatasetRegistryUpdater
         array $metadata = [],
         string $code = Artifact::CODE_DEFAULT,
     ): Artifact {
-        $info = $this->requireDataset($datasetKey);
+        // Self-registering: if the dataset isn't in the DB yet but its _meta/dataset.json
+        // exists, register it from meta first (no separate dataset:scan needed). Falls back
+        // to requireDataset() — which throws — only when there's no meta to register from.
+        $info = $this->ensureFromMetaIfExists($datasetKey) ?? $this->requireDataset($datasetKey);
 
         $artifact = $this->artifactRepository->findOneBy([
             'dataset' => $info,

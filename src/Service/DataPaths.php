@@ -203,9 +203,11 @@ final class DataPaths
 
     /**
      * Materialize the `_raw` stage as a **tier portal**: a symlink from
-     * work/<p>/<c>/_raw → vault/<p>/<c>. Raw written through the `_raw` path then lands in the
+     * work/<p>/<c>/_raw → vault/<p>/<c>/_raw. Raw written through the `_raw` path then lands in the
      * vault (the canonical, durable home), and `rm -rf work/<p>/<c>` only drops the link, never the
-     * raw bytes. See md/docs/data-layout.md.
+     * raw bytes. The portal targets the `_raw` SUBDIR of the vault dataset dir (not the whole dir),
+     * so sibling durable stages — e.g. AI `ai/claims` — live alongside `_raw` in the vault without
+     * being dragged into the raw stage. See md/docs/data-layout.md.
      *
      * Safe & idempotent: creates the vault dir, points (or re-points) the symlink. A pre-existing
      * *non-empty real* `_raw` directory is left untouched — converting that is an explicit migration,
@@ -214,7 +216,7 @@ final class DataPaths
     public function ensureRawPortal(string $datasetKey): string
     {
         $rawDir   = $this->datasetDir($datasetKey) . '/' . Stage::Raw->dir();
-        $vaultDir = $this->vaultDatasetDir($datasetKey);
+        $vaultDir = $this->vaultDatasetDir($datasetKey) . '/' . Stage::Raw->dir();
 
         $fs = $this->filesystem();
         $fs->mkdir($vaultDir);
