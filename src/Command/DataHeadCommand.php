@@ -29,7 +29,7 @@ final class DataHeadCommand
         #[Argument('Stage alias (raw|normalize|profile|terms|...)')]
         ?string $stage = null,
 
-        #[Option('Filename within stage (defaults to obj.jsonl)')]
+        #[Option('Filename within stage (default: the largest .jsonl[.gz] core in the stage, else obj.jsonl)')]
         ?string $file = null,
 
         #[Option('Number of lines', name: 'limit')]
@@ -42,6 +42,17 @@ final class DataHeadCommand
 
         $datasetRef = trim($dataset);
         $stage ??= 'normalize';
+
+        // No explicit --file: default to the largest .jsonl[.gz] core in the stage. A stage
+        // can hold several cores (obj, doc, group-named raw, …); the biggest is almost always
+        // the main records file the caller wants. Falls back to obj.jsonl if the dir is empty.
+        if ($file === null || $file === '') {
+            $file = $this->largestStageFile($datasetRef, $stage);
+            if ($file !== null && $io->isVerbose()) {
+                $io->comment(sprintf('Auto-selected largest core: %s', $file));
+            }
+        }
+
         $target = $this->paths->firstReadableStageFile($datasetRef, $stage, $file);
 
         if ($target === null) {
@@ -73,6 +84,38 @@ final class DataHeadCommand
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Basename of the largest .jsonl/.jsonl.gz file in the stage dir, or null if none.
+     * Sidecars (.db, .sidecar.json) and other extensions are ignored. The stage dir may be
+     * a portal symlink (e.g. _raw → vault), which glob() transparently follows.
+     */
+    private function largestStageFile(string $datasetRef, string $stage): ?string
+    {
+        try {
+            $dir = $this->paths->stageDir($datasetRef, $stage);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!is_dir($dir)) {
+            return null;
+        }
+
+        $best = null;
+        $bestSize = -1;
+        foreach (glob(rtrim($dir, '/') . '/*.{jsonl,jsonl.gz}', GLOB_BRACE) ?: [] as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            $size = filesize($path) ?: 0;
+            if ($size > $bestSize) {
+                $bestSize = $size;
+                $best = basename($path);
+            }
+        }
+
+        return $best;
     }
 
     private function openFile(string $path): mixed
