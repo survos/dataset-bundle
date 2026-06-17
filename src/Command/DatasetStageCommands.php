@@ -62,11 +62,12 @@ final class DatasetStageCommands
         #[Option('Normalize only this core stem (default: every core in _raw)')] ?string $core = null,
         #[Option('Convert every raw core for the dataset (default when --core is omitted)')] bool $allCores = false,
         #[Option('Max records to normalize (per dataset/core)')] ?int $limit = null,
+        #[Option('Also write the SQL profile sidecar (.db) — off by default; turn on when designing field maps')] bool $profile = false,
     ): int {
         // Default to discovering every core in _raw; --core restricts to one (the exception).
         $allCores = $allCores || $core === null;
 
-        return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core ?? 'obj', $allCores, $limit);
+        return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core ?? 'obj', $allCores, $limit, $profile);
     }
 
     #[AsCommand('dataset:assemble', 'Assemble the folio-input bundle (→ _folio/)')]
@@ -157,6 +158,7 @@ final class DatasetStageCommands
                 stage: $stage->value,
                 core: $core,
                 allCores: $allCores,
+                profile: $profile,
             );
             if ($result !== Command::SUCCESS) {
                 $failed++;
