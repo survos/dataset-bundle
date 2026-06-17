@@ -45,10 +45,13 @@ use Zenstruck\Bytes;
 final class DatasetStageCommands
 {
     public function __construct(
-        private readonly ImportConvertCommand $convert,
         private readonly DatasetInfoRepository $datasets,
         private readonly SqlProfiler $profiler,
         private readonly DataPaths $dataPaths,
+        // Optional + last with a default: these stage commands drive import:convert (import-bundle).
+        // Autowiring leaves it null when import-bundle isn't installed (optional arg → default used),
+        // so a bare app that only reads/displays datasets still boots. convertStage() guards on null.
+        private readonly ?ImportConvertCommand $convert = null,
     ) {}
 
     #[AsCommand('dataset:normalize', 'Normalize a dataset, code, or provider (→ norm/)', aliases: ['dataset:norm'])]
@@ -132,6 +135,11 @@ final class DatasetStageCommands
 
     private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $limit = null): int
     {
+        if ($this->convert === null) {
+            $io->error('This stage runs import:convert, which is unavailable (survos/import-bundle not installed).');
+            return Command::FAILURE;
+        }
+
         $keys = $this->resolveDatasetKeys($io, $ref, $provider);
         if ($keys === null) {
             return Command::FAILURE;
