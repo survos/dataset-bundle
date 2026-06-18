@@ -70,7 +70,7 @@ final class DatasetStageCommands
         return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core ?? 'obj', $allCores, $limit, $profile);
     }
 
-    #[AsCommand('dataset:assemble', 'Assemble the folio-input bundle (→ _folio/)')]
+    #[AsCommand('dataset:assemble', 'Assemble/enrich the folio-input bundle (→ _folio/)', aliases: ['dataset:enrich'])]
     public function assemble(
         SymfonyStyle $io,
         #[Argument('Dataset key (provider/code) or a bare code (e.g. "victoria")')] ?string $ref = null,
