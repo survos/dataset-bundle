@@ -134,7 +134,7 @@ final class DatasetStageCommands
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
-    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $limit = null): int
+    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $limit = null, bool $profile = false): int
     {
         if ($this->convert === null) {
             $io->error('This stage runs import:convert, which is unavailable (survos/import-bundle not installed).');
