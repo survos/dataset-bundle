@@ -149,7 +149,7 @@ final class PhraseExtractor
     #[AsEventListener(event: ImportConvertStartedEvent::class)]
     public function onStart(ImportConvertStartedEvent $event): void
     {
-        if ($event->dataset === '') {
+        if (!$event->dataset) {
             return;
         }
         // Stage isn't on this event — defer the decision to onRow.
@@ -162,12 +162,15 @@ final class PhraseExtractor
     #[AsEventListener(event: ImportConvertRowEvent::class)]
     public function onRow(ImportConvertRowEvent $event): void
     {
-        if (!Stage::isNormalized($event) || $event->row === null) {
+        // Phrase extraction is a dataset-only feature; a bare-file convert
+        // (no dataset) has nowhere to write phrases, so do nothing.
+        if (!$event->dataset || !Stage::isNormalized($event) || $event->row === null) {
             return;
         }
-        // $this->dataset is guaranteed non-null by onStart, which fires first.
-        // Let the type system surface a violation rather than silently dropping rows.
-        $this->sourceLocale ??= $this->resolveSourceLocale($this->dataset);
+        // The row event is the source of truth for the dataset: onStart may have
+        // bailed (empty started-event dataset) while rows carry an inferred key.
+        $this->dataset      ??= $event->dataset;
+        $this->sourceLocale ??= $this->resolveSourceLocale($event->dataset);
         $this->accept($event->row);
     }
 
