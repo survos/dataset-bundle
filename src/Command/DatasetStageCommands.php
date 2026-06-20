@@ -11,6 +11,8 @@ use Survos\DatasetBundle\Service\DatasetPaths;
 use Survos\ImportBundle\Command\ImportConvertCommand;
 use Survos\JsonlBundle\Sqlite\SqlProfiler;
 use Symfony\Component\Console\Attribute\Argument;
+use Psr\EventDispatcher\EventDispatcherInterface;
+use Survos\DatasetBundle\Event\BuildFolioRequestedEvent;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
@@ -52,6 +54,10 @@ final class DatasetStageCommands
         // Autowiring leaves it null when import-bundle isn't installed (optional arg → default used),
         // so a bare app that only reads/displays datasets still boots. convertStage() guards on null.
         private readonly ?ImportConvertCommand $convert = null,
+        // Decoupled folio (re)build for --folio: dispatch BuildFolioRequestedEvent; folio-bundle
+        // listens. Optional so a folio-less app still boots. (Can't inject a folio service — that
+        // would be a circular dependency, folio→dataset.)
+        private readonly ?EventDispatcherInterface $dispatcher = null,
     ) {}
 
     #[AsCommand('dataset:normalize', 'Normalize a dataset, code, or provider (→ norm/)', aliases: ['dataset:norm'])]
@@ -63,11 +69,12 @@ final class DatasetStageCommands
         #[Option('Convert every raw core for the dataset (default when --core is omitted)')] bool $allCores = false,
         #[Option('Max records to normalize (per dataset/core)')] ?int $limit = null,
         #[Option('Also write the SQL profile sidecar (.db) — off by default; turn on when designing field maps')] bool $profile = false,
+        #[Option('After normalizing, (re)build the folio so you can see current folio data inline')] bool $folio = false,
     ): int {
         // Default to discovering every core in _raw; --core restricts to one (the exception).
         $allCores = $allCores || $core === null;
 
-        return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core ?? 'obj', $allCores, $limit, $profile);
+        return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core ?? 'obj', $allCores, $limit, $profile, $folio);
     }
 
     #[AsCommand('dataset:assemble', 'Assemble/enrich the folio-input bundle (→ _folio/)', aliases: ['dataset:enrich'])]
@@ -134,7 +141,7 @@ final class DatasetStageCommands
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
-    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $limit = null, bool $profile = false): int
+    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $limit = null, bool $profile = false, bool $folio = false): int
     {
         if ($this->convert === null) {
             $io->error('This stage runs import:convert, which is unavailable (survos/import-bundle not installed).');
@@ -162,6 +169,17 @@ final class DatasetStageCommands
             );
             if ($result !== Command::SUCCESS) {
                 $failed++;
+                continue;
+            }
+
+            // --folio: ask folio-bundle (via the decoupling event) to (re)build this dataset's folio
+            // so its current data is visible right after the stage runs.
+            if ($folio) {
+                if ($this->dispatcher === null) {
+                    $io->warning('--folio requested but no event dispatcher / folio-bundle is available; skipping folio build.');
+                } else {
+                    $this->dispatcher->dispatch(new BuildFolioRequestedEvent($datasetKey, $allCores ? null : $core));
+                }
             }
         }
 
