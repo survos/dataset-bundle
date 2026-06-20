@@ -244,6 +244,12 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
         return $this->artifact($type) !== null;
     }
 
+    /** Whether a compressed (.gz) folio archive exists for this dataset — shown as a download icon. */
+    public function hasArchive(): bool
+    {
+        return $this->hasArtifact(Artifact::TYPE_FOLIO_ARCHIVE);
+    }
+
     public function artifact(string $type, string $code = Artifact::CODE_DEFAULT): ?Artifact
     {
         foreach ($this->artifacts as $artifact) {
