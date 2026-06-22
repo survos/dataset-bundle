@@ -67,14 +67,26 @@ final class DatasetStageCommands
         #[Option('Fan out over every dataset for this provider (e.g. "smith")')] ?string $provider = null,
         #[Option('Normalize only this core stem (default: every core in _raw)')] ?string $core = null,
         #[Option('Convert every raw core for the dataset (default when --core is omitted)')] bool $allCores = false,
-        #[Option('Max records to normalize (per dataset/core)')] ?int $limit = null,
+        #[Option('Max collections to normalize in a fan-out (--provider, or a bare code matching many)')] ?int $limit = null,
+        #[Option('Max records to normalize per collection/core')] ?int $rowLimit = null,
         #[Option('Also write the SQL profile sidecar (.db) — off by default; turn on when designing field maps')] bool $profile = false,
         #[Option('After normalizing, (re)build the folio so you can see current folio data inline')] bool $folio = false,
     ): int {
         // Default to discovering every core in _raw; --core restricts to one (the exception).
         $allCores = $allCores || $core === null;
 
-        return $this->convertStage($io, $ref, $provider, Stage::Normalize, $core ?? 'obj', $allCores, $limit, $profile, $folio);
+        return $this->convertStage(
+            $io,
+            ref: $ref,
+            provider: $provider,
+            stage: Stage::Normalize,
+            core: $core ?? 'obj',
+            allCores: $allCores,
+            rowLimit: $rowLimit,
+            profile: $profile,
+            folio: $folio,
+            datasetLimit: $limit,
+        );
     }
 
     #[AsCommand('dataset:assemble', 'Assemble/enrich the folio-input bundle (→ _folio/)', aliases: ['dataset:enrich'])]
@@ -85,8 +97,20 @@ final class DatasetStageCommands
         #[Option('Core filename stem')] string $core = 'obj',
         #[Option('Convert every raw core for the dataset')] bool $allCores = false,
         #[Option('Max records to assemble (per dataset/core)')] ?int $limit = null,
+        #[Option('After enriching, (re)build the folio so you can see current folio data inline')] bool $folio = false,
+        #[Option('Merge legacy 40_ai/<core>.jsonl before shared claim projection')] bool $legacyClaimFile = false,
     ): int {
-        return $this->convertStage($io, $ref, $provider, Stage::Enrich, $core, $allCores, $limit);
+        return $this->convertStage(
+            $io,
+            ref: $ref,
+            provider: $provider,
+            stage: Stage::Enrich,
+            core: $core,
+            allCores: $allCores,
+            rowLimit: $limit,
+            folio: $folio,
+            legacyClaimFile: $legacyClaimFile,
+        );
     }
 
     /**
@@ -141,7 +165,7 @@ final class DatasetStageCommands
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
-    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $limit = null, bool $profile = false, bool $folio = false): int
+    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $rowLimit = null, bool $profile = false, bool $folio = false, ?int $datasetLimit = null, bool $legacyClaimFile = true): int
     {
         if ($this->convert === null) {
             $io->error('This stage runs import:convert, which is unavailable (survos/import-bundle not installed).');
@@ -166,6 +190,13 @@ final class DatasetStageCommands
         $failed = 0;
         $failedKeys = [];
         foreach ($keys as $datasetKey) {
+            // --limit caps the number of collections actually normalized in a fan-out (datasets
+            // skipped for no-raw don't count toward it), distinct from --row-limit which caps rows
+            // per collection. Stop once we've normalized that many.
+            if ($datasetLimit !== null && $converted >= $datasetLimit) {
+                break;
+            }
+
             if ($fanOut && !$this->hasRawCore($datasetKey)) {
                 $skipped++;
                 continue;
@@ -176,12 +207,13 @@ final class DatasetStageCommands
             }
             $result = $this->convert->convert(
                 $io,
-                limit: $limit,
+                limit: $rowLimit,
                 dataset: $datasetKey,
                 stage: $stage->value,
                 core: $core,
                 allCores: $allCores,
                 profile: $profile,
+                legacyClaimFile: $legacyClaimFile,
             );
             if ($result !== Command::SUCCESS) {
                 $failed++;
@@ -198,13 +230,14 @@ final class DatasetStageCommands
                 if ($this->dispatcher === null) {
                     $io->warning('--folio requested but no event dispatcher / folio-bundle is available; skipping folio build.');
                 } else {
-                    $this->dispatcher->dispatch(new BuildFolioRequestedEvent($datasetKey, $allCores ? null : $core));
+                    $this->dispatcher->dispatch(new BuildFolioRequestedEvent($datasetKey, $allCores ? null : $core, $io));
                 }
             }
         }
 
         if ($fanOut) {
-            $summary = sprintf('Normalized %d · skipped %d (no raw yet) · failed %d', $converted, $skipped, $failed);
+            $verb = $stage === Stage::Enrich ? 'Enriched' : 'Normalized';
+            $summary = sprintf('%s %d · skipped %d (no raw yet) · failed %d', $verb, $converted, $skipped, $failed);
             if ($failed > 0) {
                 $io->warning($summary);
                 $io->listing(array_slice($failedKeys, 0, 20));

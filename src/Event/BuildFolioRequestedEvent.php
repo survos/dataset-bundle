@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Event;
 
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
@@ -20,6 +21,12 @@ final class BuildFolioRequestedEvent extends Event
     public function __construct(
         public readonly string $datasetKey,
         public readonly ?string $core = null,
+        /**
+         * The console style the dispatching command is writing to. When set, the folio-bundle
+         * listener renders the build result onto it (rows + the browse link on the folio server),
+         * so an inline `--folio` build isn't silent. Null when dispatched outside a command.
+         */
+        public readonly ?SymfonyStyle $io = null,
     ) {
     }
 }
