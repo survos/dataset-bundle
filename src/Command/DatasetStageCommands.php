@@ -153,9 +153,25 @@ final class DatasetStageCommands
             return Command::FAILURE;
         }
 
+        // A fan-out (--provider, or a bare code matching many keys) walks every registered
+        // dataset, but a provider like DC catalogues ~1000 collections and only fetches the
+        // larger ones. A dataset with no raw on disk hasn't been fetched yet — that's an
+        // expected state, not a failure — so skip it quietly and summarise at the end rather
+        // than emitting a per-dataset [ERROR] for each. A single explicit target (one key)
+        // still runs convert unconditionally, so its missing-raw error stays loud.
+        $fanOut = count($keys) > 1;
+
+        $converted = 0;
+        $skipped = 0;
         $failed = 0;
+        $failedKeys = [];
         foreach ($keys as $datasetKey) {
-            if (count($keys) > 1) {
+            if ($fanOut && !$this->hasRawCore($datasetKey)) {
+                $skipped++;
+                continue;
+            }
+
+            if ($fanOut) {
                 $io->section($datasetKey);
             }
             $result = $this->convert->convert(
@@ -169,11 +185,15 @@ final class DatasetStageCommands
             );
             if ($result !== Command::SUCCESS) {
                 $failed++;
+                $failedKeys[] = $datasetKey;
                 continue;
             }
+            $converted++;
 
-            // --folio: ask folio-bundle (via the decoupling event) to (re)build this dataset's folio
-            // so its current data is visible right after the stage runs.
+            // --folio: (re)build this dataset's folio inline, right after it normalizes, via the
+            // decoupling event (folio-bundle listens and runs the full folio:build path: ingest →
+            // inflate working folio → register the artifact). Convenient during testing; the
+            // production path will move normalize + folio into an async workflow.
             if ($folio) {
                 if ($this->dispatcher === null) {
                     $io->warning('--folio requested but no event dispatcher / folio-bundle is available; skipping folio build.');
@@ -183,7 +203,34 @@ final class DatasetStageCommands
             }
         }
 
+        if ($fanOut) {
+            $summary = sprintf('Normalized %d · skipped %d (no raw yet) · failed %d', $converted, $skipped, $failed);
+            if ($failed > 0) {
+                $io->warning($summary);
+                $io->listing(array_slice($failedKeys, 0, 20));
+            } else {
+                $io->success($summary);
+            }
+        }
+
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    /** Cheap "has this dataset been fetched?" probe: any *.jsonl(.gz) in its _raw dir. */
+    private function hasRawCore(string $datasetKey): bool
+    {
+        $rawDir = (new DatasetPaths($this->dataPaths, $datasetKey))->rawDir;
+        if (!is_dir($rawDir)) {
+            return false;
+        }
+
+        foreach (['*.jsonl', '*.jsonl.gz'] as $pattern) {
+            if (glob("{$rawDir}/{$pattern}")) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

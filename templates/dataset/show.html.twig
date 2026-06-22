@@ -3,6 +3,10 @@
 {% block title %}Dataset: {{ dataset.datasetKey }}{% endblock %}
 
 {% block body %}
+{% set sourceUrl = dataset.sourceUrl %}
+{% set folioArtifact = dataset.artifact(constant('Survos\\DatasetBundle\\Entity\\Artifact::TYPE_FOLIO')) %}
+{% set folioBase = folio_server|default('')|trim('/') %}
+{% set folioUrl = folioArtifact and folioBase ? folioBase ~ '/folio/' ~ dataset.provider ~ '/' ~ dataset.code : null %}
 <div class="page-header d-print-none">
   <div class="container-xl">
     <div class="row align-items-center">
@@ -17,6 +21,12 @@
         <div class="text-secondary"><code>{{ dataset.datasetKey }}</code></div>
       </div>
       <div class="col-auto d-flex gap-2">
+        {% if sourceUrl %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ sourceUrl }}" target="_blank" rel="noopener">Source</a>
+        {% endif %}
+        {% if folioUrl %}
+          <a class="btn btn-sm btn-outline-primary" href="{{ folioUrl }}" target="_blank" rel="noopener">ZM Folio</a>
+        {% endif %}
         {% if route_exists('meili_insta') %}
           <a class="btn btn-sm btn-outline-primary" href="{{ path('meili_insta', {indexName: 'md_' ~ dataset.provider}) }}" target="_blank">Search</a>
         {% endif %}
@@ -48,6 +58,22 @@
               <dd class="col-sm-9">{{ dataset.locale ?: 'unknown' }}</dd>
               <dt class="col-sm-3">Country</dt>
               <dd class="col-sm-9">{{ dataset.country ?: 'unknown' }}</dd>
+              <dt class="col-sm-3">Source</dt>
+              <dd class="col-sm-9">
+                {% if sourceUrl %}
+                  <a href="{{ sourceUrl }}" target="_blank" rel="noopener">{{ sourceUrl }}</a>
+                {% else %}
+                  unknown
+                {% endif %}
+              </dd>
+              <dt class="col-sm-3">Folio</dt>
+              <dd class="col-sm-9">
+                {% if folioUrl %}
+                  <a href="{{ folioUrl }}" target="_blank" rel="noopener">{{ folioUrl }}</a>
+                {% else %}
+                  not available
+                {% endif %}
+              </dd>
             </dl>
           </div>
         </div>
@@ -64,7 +90,11 @@
                   <div>
                     <div class="fw-semibold">{{ artifact.type }} / {{ artifact.code }}</div>
                     {% if artifact.uri %}
-                      <code class="small text-muted">{{ artifact.uri }}</code>
+                      {% if artifact.uri starts with 'http' %}
+                        <div><a class="small" href="{{ artifact.uri }}" target="_blank" rel="noopener">{{ artifact.uri }}</a></div>
+                      {% else %}
+                        <code class="small text-muted">{{ artifact.uri }}</code>
+                      {% endif %}
                     {% endif %}
                   </div>
                   <div class="text-end small text-muted">

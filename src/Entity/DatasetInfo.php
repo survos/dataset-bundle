@@ -55,23 +55,24 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
     #[ORM\Id]
     #[ORM\Column(type: Types::STRING, length: 128)]
     #[Groups(['dataset:read'])]
-    #[Field(searchable: true)]
+    #[Field(searchable: true, sortable: true, order: 10)]
     public readonly string $datasetKey;  // e.g. "fortepan/hu", "dc/0v83gg01j"
 
     // ── From 00_meta/dataset.yaml ─────────────────────────────────────────────
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
-    #[Field(searchable: true)]
+    #[Field(searchable: true, sortable: true, order: 20)]
     public ?string $label = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(searchable: true, order: 30)]
     public ?string $description = null;
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
-    #[Field(filterable: true, facet: true, searchable: true)]
+    #[Field(searchable: true, sortable: true, filterable: true, facet: true, order: 40)]
     public ?string $aggregator = null;    // dc | pp | fortepan | mds | mus | etc.
 
     #[ORM\ManyToOne(targetEntity: Provider::class, inversedBy: 'datasets')]
@@ -85,35 +86,41 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
-    #[Field(filterable: true, facet: true)]
+    #[Field(searchable: true, sortable: true, filterable: true, facet: true, order: 50)]
     public ?string $locale = null;        // default locale: en | de | hu | etc.
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
-    #[Field(filterable: true, facet: true)]
+    #[Field(searchable: true, sortable: true, filterable: true, facet: true, order: 60)]
     public ?string $country = null;       // ISO2: US | HU | GB | etc.
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(searchable: true, visible: false)]
     public ?string $contactUrl = null;    // collection homepage
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(searchable: true, filterable: true, facet: true, visible: false)]
     public ?string $rightsUri = null;
 
     #[ORM\Column]
     #[Groups(['dataset:read'])]
+    #[Field(sortable: true, filterable: true, widget: Widget::Range, order: 70)]
     public int $objCount = 0;             // from extras.obj_count or profile recordCount
 
     // ── Paths (resolved at scan time, no filesystem access needed later) ──────
 
     #[ORM\Column(nullable: true)]
+    #[Field(searchable: true, visible: false)]
     public ?string $metaPath = null;      // 00_meta/dataset.yaml
 
     #[ORM\Column(nullable: true)]
+    #[Field(searchable: true, visible: false)]
     public ?string $rawPath = null;       // 05_raw/obj.jsonl
 
     #[ORM\Column(nullable: true)]
+    #[Field(searchable: true, visible: false)]
     public ?string $profilePath = null;   // 21_profile/obj.profile.json
 
     // ── Pipeline status ───────────────────────────────────────────────────────
@@ -121,28 +128,32 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
     /** One of: discovered | raw | normalized | profiled | folio | indexed */
     #[ORM\Column(length: 32)]
     #[Groups(['dataset:read'])]
-    #[Field(filterable: true, facet: true)]
+    #[Field(sortable: true, filterable: true, facet: true, order: 80)]
     public string $status = 'discovered';
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
-    #[Field(filterable: true, sortable: true, widget: Widget::Range)]
+    #[Field(sortable: true, filterable: true, widget: Widget::Range, order: 90)]
     public ?int $normalizedCount = null;   // from profile recordCount
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(sortable: true, filterable: true, widget: Widget::Range, order: 100)]
     public ?int $meiliDocCount = null;     // docs in Meilisearch index
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(sortable: true, widget: Widget::Date, order: 110)]
     public ?\DateTimeImmutable $lastScanned = null;
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(sortable: true, widget: Widget::Date, order: 120)]
     public ?\DateTimeImmutable $lastNormalized = null;
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
+    #[Field(sortable: true, widget: Widget::Date, order: 130)]
     public ?\DateTimeImmutable $lastIndexed = null;
 
     // ── Compiled schema (from profile + field_map) ────────────────────────────
@@ -233,6 +244,24 @@ final class DatasetInfo implements RouteParametersInterface, \Stringable
     public function getCode(): string
     {
         return $this->code();
+    }
+
+    #[Groups(['dataset:read'])]
+    public function getSourceUrl(): ?string
+    {
+        $links = is_array($this->meta['source']['links'] ?? null) ? $this->meta['source']['links'] : [];
+        foreach (['collection', 'source', 'site', 'website', 'record', 'institution'] as $key) {
+            $url = $links[$key] ?? null;
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+        }
+
+        if ($this->provider() === 'dc') {
+            return 'https://www.digitalcommonwealth.org/collections/commonwealth:' . rawurlencode($this->code());
+        }
+
+        return $this->contactUrl;
     }
 
     public function hasRaw(): bool        { return $this->rawPath !== null; }

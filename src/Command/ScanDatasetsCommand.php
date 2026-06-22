@@ -517,8 +517,8 @@ final class ScanDatasetsCommand extends DataCommand
         $info->lastScanned  = new \DateTimeImmutable();
 
         // Resolve paths — store absolute paths so no filesystem access needed later
-        $rawFile = $paths->rawFile('obj.jsonl');
-        $info->rawPath        = is_file($rawFile) ? $rawFile : null;
+        $info->rawPath = $this->dataPaths->firstReadableStageFile($info->datasetKey, 'raw', 'obj.jsonl')
+            ?? $this->dataPaths->firstReadableStageFile($info->datasetKey, 'raw');
 
         $profFile = $paths->profileFile('obj.profile.json');
         $info->profilePath    = is_file($profFile) ? $profFile : null;

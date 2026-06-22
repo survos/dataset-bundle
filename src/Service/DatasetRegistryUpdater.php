@@ -197,8 +197,8 @@ final class DatasetRegistryUpdater
         $info->metaPath = $metaFile;
         $info->lastScanned = new \DateTimeImmutable();
 
-        $rawFile = $paths->rawFile('obj.jsonl');
-        $info->rawPath = is_file($rawFile) ? $rawFile : null;
+        $info->rawPath = $this->dataPaths->firstReadableStageFile($info->datasetKey, 'raw', 'obj.jsonl')
+            ?? $this->dataPaths->firstReadableStageFile($info->datasetKey, 'raw');
 
         $profileFile = $paths->profileFile('obj.profile.json');
         $info->profilePath = is_file($profileFile) ? $profileFile : null;
