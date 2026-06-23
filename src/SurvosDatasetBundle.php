@@ -64,6 +64,9 @@ final class SurvosDatasetBundle extends AbstractBundle
                 ->scalarNode('cache_root')->defaultValue('cache')->end()
                 ->scalarNode('zips_root')->defaultValue('vault')->end()
                 ->scalarNode('default_object_filename')->defaultValue('obj.jsonl')->end()
+                ->integerNode('normalized_row_limit')->defaultValue(0)
+                    ->info('Cap records per core when the workflow normalizes (raw→normalized). 0 = all. Bind to an env var (e.g. DATASET_NORMALIZED_ROW_LIMIT) to throttle for smoke tests in .env.local.')
+                ->end()
                 ->arrayNode('providers')
                     ->info('Optional application-level provider allowlist. When set, data:scan-datasets only scans these provider directories.')
                     ->scalarPrototype()->end()
@@ -91,6 +94,7 @@ final class SurvosDatasetBundle extends AbstractBundle
         $this->captureRouteConfig($config);
         $container->parameters()->set('survos_dataset.registry_database_path', $config['registry_database_path']);
         $container->parameters()->set('survos_dataset.providers', $config['providers']);
+        $container->parameters()->set('survos_dataset.normalized_row_limit', $config['normalized_row_limit']);
         $services = $container->services();
 
         $services->set(DataPaths::class)
