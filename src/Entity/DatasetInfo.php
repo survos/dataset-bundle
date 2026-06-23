@@ -20,6 +20,8 @@ use Survos\FieldBundle\Attribute\RouteIdentity;
 use Survos\FieldBundle\Entity\RouteIdentityTrait;
 use Survos\FieldBundle\Entity\RouteParametersInterface;
 use Survos\FieldBundle\Enum\Widget;
+use Survos\StateBundle\Traits\MarkingInterface;
+use Survos\StateBundle\Traits\MarkingTrait;
 use Symfony\Component\Serializer\Attribute\Groups;
 
 /**
@@ -49,9 +51,11 @@ use Symfony\Component\Serializer\Attribute\Groups;
 )]
 #[ApiFilter(SearchFilter::class, properties: ['datasetKey' => 'partial', 'label' => 'partial', 'aggregator' => 'exact', 'status' => 'exact', 'country' => 'exact'])]
 #[ApiFilter(OrderFilter::class, properties: ['datasetKey', 'label', 'aggregator', 'status', 'objCount', 'normalizedCount', 'lastScanned'])]
-final class DatasetInfo implements RouteParametersInterface, \Stringable
+final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \Stringable
 {
     use RouteIdentityTrait;
+    // Workflow lifecycle place (meta → raw → normalize → enrich → folio) — see app IDatasetWorkflow.
+    use MarkingTrait;
     #[ORM\Id]
     #[ORM\Column(type: Types::STRING, length: 128)]
     #[Groups(['dataset:read'])]

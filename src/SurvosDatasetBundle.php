@@ -125,6 +125,13 @@ final class SurvosDatasetBundle extends AbstractBundle
             ->public()
             ->arg('$entityManager', new \Symfony\Component\DependencyInjection\Reference('doctrine.orm.dataset_entity_manager'));
 
+        // Shared reset core (dataset:purge + the app's agg:reset). The optional workflow.registry is
+        // pulled in via #[Autowire] on the constructor.
+        $services->set(\Survos\DatasetBundle\Service\DatasetReset::class)
+            ->autowire()
+            ->autoconfigure()
+            ->public();
+
         foreach ([DatasetMetadataConfiguration::class, DatasetMetadataLoader::class, DatasetMetadataEnsurer::class] as $class) {
             $services->set($class)
                 ->autowire()

@@ -27,6 +27,7 @@
         "survos/lingua-contracts": "^2.5",
         "survos/lingua-core": "^2.5",
         "survos/jsonl-bundle": "^2.5",
+        "survos/state-bundle": "^2.5",
         "zenstruck/bytes": "^1.1"
     },
     "require-dev": {
