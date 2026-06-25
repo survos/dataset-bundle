@@ -89,7 +89,30 @@ final class DatasetStageCommands
         );
     }
 
-    #[AsCommand('dataset:assemble', 'Assemble/enrich the folio-input bundle (→ _folio/)', aliases: ['dataset:enrich'])]
+    #[AsCommand(
+        'dataset:assemble',
+        'Enrich normalized rows with claims → the folio-input bundle (work/<ds>/_folio/)',
+        aliases: ['dataset:enrich'],
+        help: <<<'HELP'
+            The "enrich" stage of the dataset pipeline. Reads the normalized core
+            (work/<ds>/norm/<core>.jsonl), folds claims for each row from the shared claims DB
+            (AI results written by mediary, plus any modeled source claims) onto the row's fields —
+            e.g. ai:denseSummary → denseSummary, dcterms:subject → subjects — and writes the
+            enriched folio-input bundle to work/<ds>/_folio/<core>.jsonl.
+
+            That bundle is what <info>folio:build</info> consumes (it prefers _folio over norm), so the usual
+            order is:  produce claims (dataset:ai, or media:ensure + media:sync → mediary)  →
+            <info>dataset:assemble</info>  →  <info>folio:build</info>.
+
+              <info>dataset:assemble mus/fortepan</info>                 enrich one dataset's obj core
+              <info>dataset:assemble mus/fortepan --folio</info>         …and rebuild the folio to view it inline
+              <info>dataset:assemble --provider smith --all-cores</info> every core of every smith dataset
+              <info>dataset:assemble dc/123 --legacy-claim-file</info>   also merge legacy 40_ai/<core>.jsonl first
+
+            Claims come from the shared claims DB (CLAIMS_DATABASE_URL); with no claims this is a
+            near-passthrough of the normalized rows.
+            HELP,
+    )]
     public function assemble(
         SymfonyStyle $io,
         #[Argument('Dataset key (provider/code) or a bare code (e.g. "victoria")')] ?string $ref = null,
