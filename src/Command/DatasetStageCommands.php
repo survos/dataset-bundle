@@ -228,6 +228,10 @@ final class DatasetStageCommands
             if ($fanOut) {
                 $io->section($datasetKey);
             }
+            // Enrich folds claims from the vault claims.jsonl (materialised by `claims:fetch`) so it
+            // never queries the live claims DB per row. DataPaths owns the vault layout; import-bundle
+            // just reads the file we hand it.
+            $claimsFile = $stage === Stage::Enrich ? $this->dataPaths->claimsFile($datasetKey) : null;
             $result = $this->convert->convert(
                 $io,
                 limit: $rowLimit,
@@ -237,6 +241,7 @@ final class DatasetStageCommands
                 allCores: $allCores,
                 profile: $profile,
                 legacyClaimFile: $legacyClaimFile,
+                claimsFile: $claimsFile,
             );
             if ($result !== Command::SUCCESS) {
                 $failed++;
