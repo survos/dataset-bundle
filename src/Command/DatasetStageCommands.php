@@ -107,10 +107,9 @@ final class DatasetStageCommands
               <info>dataset:assemble mus/fortepan</info>                 enrich one dataset's obj core
               <info>dataset:assemble mus/fortepan --folio</info>         …and rebuild the folio to view it inline
               <info>dataset:assemble --provider smith --all-cores</info> every core of every smith dataset
-              <info>dataset:assemble dc/123 --legacy-claim-file</info>   also merge legacy 40_ai/<core>.jsonl first
 
-            Claims come from the shared claims DB (CLAIMS_DATABASE_URL); with no claims this is a
-            near-passthrough of the normalized rows.
+            Claims are folded from the vault claims.jsonl (populate it with claims:fetch/claims:export);
+            with no claims file this is a near-passthrough of the normalized rows.
             HELP,
     )]
     public function assemble(
@@ -121,7 +120,6 @@ final class DatasetStageCommands
         #[Option('Convert every raw core for the dataset')] bool $allCores = false,
         #[Option('Max records to assemble (per dataset/core)')] ?int $limit = null,
         #[Option('After enriching, (re)build the folio so you can see current folio data inline')] bool $folio = false,
-        #[Option('Merge legacy 40_ai/<core>.jsonl before shared claim projection')] bool $legacyClaimFile = false,
     ): int {
         return $this->convertStage(
             $io,
@@ -132,7 +130,6 @@ final class DatasetStageCommands
             allCores: $allCores,
             rowLimit: $limit,
             folio: $folio,
-            legacyClaimFile: $legacyClaimFile,
         );
     }
 
@@ -188,7 +185,7 @@ final class DatasetStageCommands
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
-    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $rowLimit = null, bool $profile = false, bool $folio = false, ?int $datasetLimit = null, bool $legacyClaimFile = true): int
+    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $rowLimit = null, bool $profile = false, bool $folio = false, ?int $datasetLimit = null): int
     {
         if ($this->convert === null) {
             $io->error('This stage runs import:convert, which is unavailable (survos/import-bundle not installed).');
@@ -240,7 +237,6 @@ final class DatasetStageCommands
                 core: $core,
                 allCores: $allCores,
                 profile: $profile,
-                legacyClaimFile: $legacyClaimFile,
                 claimsFile: $claimsFile,
             );
             if ($result !== Command::SUCCESS) {
