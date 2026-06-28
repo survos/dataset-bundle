@@ -218,6 +218,8 @@ final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \
     public function __construct(string $datasetKey)
     {
         $this->datasetKey = $datasetKey;
+        // The workflow definition is app-owned; keep the bundle entity decoupled from app workflow constants.
+        $this->marking = 'new';
         $this->artifacts = new ArrayCollection();
     }
 

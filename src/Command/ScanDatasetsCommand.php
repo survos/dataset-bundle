@@ -50,6 +50,14 @@ final class ScanDatasetsCommand extends DataCommand
         private readonly ?FolioService $folioService = null,
     ) {}
 
+    private function ensureInitialMarking(DatasetInfo $info): void
+    {
+        if ($info->marking === null || $info->marking === 'NEW') {
+            // The workflow is app-owned; dataset-bundle only seeds the agreed initial place.
+            $info->marking = 'new';
+        }
+    }
+
     public function __invoke(
         SymfonyStyle $io,
         #[Option('Only scan this provider (e.g. fortepan, dc, pp)')] ?string $provider = null,
@@ -175,12 +183,14 @@ final class ScanDatasetsCommand extends DataCommand
 
                 if ($existing && $existing->metaPath !== null && !$force && !$statusOnly) {
                     $existing->setProviderEntity($providersByCode[$providerCode]);
+                    $this->ensureInitialMarking($existing);
                     $updated++;
                     $count++;
                     continue;
                 }
 
                 $info = $existing ?? new DatasetInfo($datasetKey);
+                $this->ensureInitialMarking($info);
                 $info->setProviderEntity($providersByCode[$providerCode]);
 
                 if (!$statusOnly) {
@@ -233,6 +243,7 @@ final class ScanDatasetsCommand extends DataCommand
                 $info->aggregator = $info->provider();
                 $this->em->persist($info);
             }
+            $this->ensureInitialMarking($info);
 
             $providerCode = $info->provider();
             $providerEntity = $providersByCode[$providerCode]
@@ -293,6 +304,7 @@ final class ScanDatasetsCommand extends DataCommand
                 $info->aggregator = $info->provider();
                 $this->em->persist($info);
             }
+            $this->ensureInitialMarking($info);
 
             $artifact = $this->artifactRepository->findOneBy([
                 'dataset' => $info,
