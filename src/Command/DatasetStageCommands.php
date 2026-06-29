@@ -8,6 +8,7 @@ use Survos\DatasetBundle\Enum\Stage;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\DatasetBundle\Service\DataPaths;
 use Survos\DatasetBundle\Service\DatasetPaths;
+use Survos\ClaimsBundle\Service\ClaimsVaultWriter;
 use Survos\ImportBundle\Command\ImportConvertCommand;
 use Survos\JsonlBundle\Sqlite\SqlProfiler;
 use Symfony\Component\Console\Attribute\Argument;
@@ -58,6 +59,12 @@ final class DatasetStageCommands
         // listens. Optional so a folio-less app still boots. (Can't inject a folio service — that
         // would be a circular dependency, folio→dataset.)
         private readonly ?EventDispatcherInterface $dispatcher = null,
+        // Optional claims:fetch service (claims-bundle). When present, dataset:assemble refreshes the
+        // vault claims.jsonl from the central claims DB BEFORE enriching — so you can't forget the
+        // claims:fetch step and silently enrich against a stale snapshot. The SAME service backs the
+        // claims:fetch command (no duplicated write logic). Null when claims-bundle isn't installed
+        // or no claims DB is wired → assemble falls back to the existing claims.jsonl.
+        private readonly ?ClaimsVaultWriter $claimsWriter = null,
     ) {}
 
     #[AsCommand('dataset:normalize', 'Normalize a dataset, code, or provider (→ norm/)', aliases: ['dataset:norm'])]
@@ -120,6 +127,7 @@ final class DatasetStageCommands
         #[Option('Convert every raw core for the dataset')] bool $allCores = false,
         #[Option('Max records to assemble (per dataset/core)')] ?int $limit = null,
         #[Option('After enriching, (re)build the folio so you can see current folio data inline')] bool $folio = false,
+        #[Option('Skip the automatic claims:fetch (enrich against the existing vault claims.jsonl as-is)')] bool $skipClaimsFetch = false,
     ): int {
         return $this->convertStage(
             $io,
@@ -130,6 +138,7 @@ final class DatasetStageCommands
             allCores: $allCores,
             rowLimit: $limit,
             folio: $folio,
+            fetchClaims: !$skipClaimsFetch,
         );
     }
 
@@ -185,7 +194,7 @@ final class DatasetStageCommands
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
-    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $rowLimit = null, bool $profile = false, bool $folio = false, ?int $datasetLimit = null): int
+    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $rowLimit = null, bool $profile = false, bool $folio = false, ?int $datasetLimit = null, bool $fetchClaims = false): int
     {
         if ($this->convert === null) {
             $io->error('This stage runs import:convert, which is unavailable (survos/import-bundle not installed).');
@@ -229,6 +238,19 @@ final class DatasetStageCommands
             // never queries the live claims DB per row. DataPaths owns the vault layout; import-bundle
             // just reads the file we hand it.
             $claimsFile = $stage === Stage::Enrich ? $this->dataPaths->claimsFile($datasetKey) : null;
+            // Refresh the vault claims.jsonl from the central claims DB before folding it in, so a
+            // forgotten `claims:fetch` can't make enrich silently use a stale snapshot. Delegates to
+            // the same ClaimsVaultWriter the claims:fetch command uses. Best-effort: if claims-bundle/
+            // the claims DB isn't wired, or the fetch fails, fall back to whatever claims.jsonl already
+            // exists. --skip-claims-fetch turns this off.
+            if ($fetchClaims && $stage === Stage::Enrich && $this->claimsWriter?->isAvailable()) {
+                try {
+                    $r = $this->claimsWriter->write($datasetKey);
+                    $io->writeln(sprintf('  claims:fetch %s → %d claim(s), %d run(s)', $datasetKey, $r['claims'], $r['runs']));
+                } catch (\Throwable $e) {
+                    $io->warning(sprintf('Inline claims:fetch failed for %s (%s); enriching against the existing claims.jsonl.', $datasetKey, $e->getMessage()));
+                }
+            }
             $result = $this->convert->convert(
                 $io,
                 limit: $rowLimit,
