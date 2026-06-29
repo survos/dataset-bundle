@@ -51,7 +51,7 @@ final class SurvosDatasetBundle extends AbstractBundle
                 ->booleanNode('routes_enabled')->defaultTrue()
                     ->info('Set false to disable automatic bundle route registration.')
                 ->end()
-                ->scalarNode('route_prefix')->defaultValue('')
+                ->scalarNode('route_prefix')->defaultValue('/data')
                     ->info('URL prefix applied to all routes from this bundle.')
                 ->end()
                 ->scalarNode('data_dir')->defaultValue('%env(APP_DATA_DIR)%')->end()

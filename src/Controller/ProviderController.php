@@ -22,13 +22,13 @@ final class ProviderController extends AbstractController
     ) {
     }
 
-    #[Route('/data/providers', name: 'data_bundle_provider_index', methods: ['GET'])]
+    #[Route('/providers', name: 'data_bundle_provider_index', methods: ['GET'])]
     public function index(): Response
     {
         return $this->render('@SurvosDatasetBundle/provider/index.html.twig');
     }
 
-    #[Route('/data/providers/{provider}', name: 'data_bundle_provider_show', methods: ['GET'])]
+    #[Route('/providers/{provider}', name: 'data_bundle_provider_show', methods: ['GET'])]
     public function show(string $provider): Response
     {
         $providerCode = trim($provider);
@@ -54,7 +54,7 @@ final class ProviderController extends AbstractController
         ]);
     }
 
-    #[Route('/data/datasets/{provider}/{code}', name: 'data_bundle_dataset_show', requirements: ['code' => '.+'], methods: ['GET'])]
+    #[Route('/datasets/{provider}/{code}', name: 'data_bundle_dataset_show', requirements: ['code' => '.+'], methods: ['GET'])]
     public function dataset(string $provider, string $code): Response
     {
         $providerCode = strtolower(trim($provider));
