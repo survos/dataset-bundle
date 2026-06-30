@@ -169,9 +169,39 @@ final class DataPaths
     }
 
     /**
-     * Provider-level acquired source pages — listing pages, API responses, HTML
-     * captures — durable in the vault: vault/<provider>/_pages. This is the
-     * "acquire" (provider:*:vault) output; raw cores are derived from it.
+     * Canonical provider-level capture directory: vault/<provider>/_capture. The durable home for
+     * everything acquired BEFORE per-dataset raw cores exist — listing/API pages, and per-dataset
+     * SOURCE archives (euro .zip, the nara bulk ZIP) that are then extracted into <code>/_raw. Keeps
+     * those out of the provider archive ROOT (where they collide with the <code>/ dataset dirs).
+     *
+     * Created lazily (only pass $create=true when actually about to write).
+     */
+    public function captureDir(string $providerId, bool $create = false): string
+    {
+        $dir = $this->providerArchiveRoot($providerId) . '/_capture';
+        if ($create) {
+            $this->filesystem()->mkdir($dir);
+        }
+
+        return $dir;
+    }
+
+    /** A named file inside the provider capture dir: vault/<provider>/_capture/<relativePath>. */
+    public function captureFile(string $providerId, string $relativePath, bool $createDir = false): string
+    {
+        $relativePath = ltrim(trim($relativePath), '/');
+        if ($relativePath === '' || str_contains($relativePath, "\0") || str_contains($relativePath, '..')) {
+            throw new \InvalidArgumentException('Invalid capture relative path.');
+        }
+
+        return $this->captureDir($providerId, $createDir) . '/' . $relativePath;
+    }
+
+    /**
+     * Provider-level acquired source pages: vault/<provider>/_pages.
+     *
+     * @deprecated Legacy spelling of {@see captureDir()} (which uses the canonical _capture). Kept so
+     * dc/grp captures already on disk keep resolving; new providers should use captureDir().
      *
      * Created lazily (only pass $create=true when actually about to write).
      */
