@@ -27,6 +27,12 @@ final class BuildFolioRequestedEvent extends Event
          * so an inline `--folio` build isn't silent. Null when dispatched outside a command.
          */
         public readonly ?SymfonyStyle $io = null,
+        /**
+         * Force a rebuild even if the folio looks up-to-date. True for inline `--folio` builds: they run
+         * immediately after a stage rewrote the data, so the existing folio is necessarily stale and the
+         * freshness check must be bypassed.
+         */
+        public readonly bool $force = false,
     ) {
     }
 }

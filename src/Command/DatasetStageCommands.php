@@ -276,7 +276,9 @@ final class DatasetStageCommands
                 if ($this->dispatcher === null) {
                     $io->warning('--folio requested but no event dispatcher / folio-bundle is available; skipping folio build.');
                 } else {
-                    $this->dispatcher->dispatch(new BuildFolioRequestedEvent($datasetKey, $allCores ? null : $core, $io));
+                    // Inline `--folio` runs right after this stage rewrote the data, so always force —
+                    // otherwise the build's freshness check can skip the now-stale folio.
+                    $this->dispatcher->dispatch(new BuildFolioRequestedEvent($datasetKey, $allCores ? null : $core, $io, force: true));
                 }
             }
         }
