@@ -77,12 +77,32 @@ final class DatasetStageCommands
         #[Option('Max collections to normalize in a fan-out (--provider, or a bare code matching many)')] ?int $limit = null,
         #[Option('Max records to normalize per collection/core')] ?int $rowLimit = null,
         #[Option('Also write the SQL profile sidecar (.db) — off by default; turn on when designing field maps')] bool $profile = false,
-        #[Option('After normalizing, (re)build the folio so you can see current folio data inline')] bool $folio = false,
+        #[Option('Run the full chain to a folio: normalize → enrich (claims:fetch + fold current AI) → build')] bool $folio = false,
     ): int {
         // Default to discovering every core in _raw; --core restricts to one (the exception).
         $allCores = $allCores || $core === null;
 
-        return $this->convertStage(
+        // Plain normalize — just the one stage.
+        if (!$folio) {
+            return $this->convertStage(
+                $io,
+                ref: $ref,
+                provider: $provider,
+                stage: Stage::Normalize,
+                core: $core ?? 'obj',
+                allCores: $allCores,
+                rowLimit: $rowLimit,
+                profile: $profile,
+                datasetLimit: $limit,
+            );
+        }
+
+        // --folio is the full raw→folio chain: normalize → enrich (claims:fetch + fold whatever AI is
+        // ready) → build the folio. Enrich is a near-passthrough when there are no claims yet, so it's
+        // always safe to include — running it here means `data:norm <ds> --folio` reliably reflects the
+        // current AI without remembering a separate `dataset:assemble`. The build happens after enrich
+        // (folio:build consumes _folio), not after normalize.
+        $rc = $this->convertStage(
             $io,
             ref: $ref,
             provider: $provider,
@@ -91,7 +111,22 @@ final class DatasetStageCommands
             allCores: $allCores,
             rowLimit: $rowLimit,
             profile: $profile,
-            folio: $folio,
+            datasetLimit: $limit,
+        );
+        if ($rc !== Command::SUCCESS) {
+            return $rc;
+        }
+
+        return $this->convertStage(
+            $io,
+            ref: $ref,
+            provider: $provider,
+            stage: Stage::Enrich,
+            core: $core ?? 'obj',
+            allCores: $allCores,
+            rowLimit: $rowLimit,
+            folio: true,
+            fetchClaims: true,
             datasetLimit: $limit,
         );
     }
