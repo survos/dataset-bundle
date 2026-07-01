@@ -5,16 +5,17 @@ namespace Survos\DatasetBundle\Command;
 
 use Survos\DatasetBundle\Entity\DatasetInfo;
 use Survos\DatasetBundle\Enum\Stage;
+use Survos\DatasetBundle\Input\DatasetInputDTO;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\DatasetBundle\Service\DataPaths;
 use Survos\DatasetBundle\Service\DatasetPaths;
 use Survos\ClaimsBundle\Service\ClaimsVaultWriter;
 use Survos\ImportBundle\Command\ImportConvertCommand;
 use Survos\JsonlBundle\Sqlite\SqlProfiler;
-use Symfony\Component\Console\Attribute\Argument;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Survos\DatasetBundle\Event\BuildFolioRequestedEvent;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
@@ -70,11 +71,10 @@ final class DatasetStageCommands
     #[AsCommand('dataset:normalize', 'Normalize a dataset, code, or provider (→ norm/)', aliases: ['dataset:norm'])]
     public function normalize(
         SymfonyStyle $io,
-        #[Argument('Dataset key (provider/code) or a bare code (e.g. "victoria")')] ?string $ref = null,
-        #[Option('Fan out over every dataset for this provider (e.g. "smith")')] ?string $provider = null,
+        #[MapInput] DatasetInputDTO $input,
         #[Option('Normalize only this core stem (default: every core in _raw)')] ?string $core = null,
         #[Option('Convert every raw core for the dataset (default when --core is omitted)')] bool $allCores = false,
-        #[Option('Max collections to normalize in a fan-out (--provider, or a bare code matching many)')] ?int $limit = null,
+        #[Option('Max collections to normalize in a fan-out (--provider/--all)')] ?int $limit = null,
         #[Option('Max records to normalize per collection/core')] ?int $rowLimit = null,
         #[Option('Also write the SQL profile sidecar (.db) — off by default; turn on when designing field maps')] bool $profile = false,
         #[Option('Run the full chain to a folio: normalize → enrich (claims:fetch + fold current AI) → build')] bool $folio = false,
@@ -82,36 +82,54 @@ final class DatasetStageCommands
         // Default to discovering every core in _raw; --core restricts to one (the exception).
         $allCores = $allCores || $core === null;
 
-        // Plain normalize — just the one stage.
-        if (!$folio) {
-            return $this->convertStage(
-                $io,
-                ref: $ref,
-                provider: $provider,
-                stage: Stage::Normalize,
-                core: $core ?? 'obj',
-                allCores: $allCores,
-                rowLimit: $rowLimit,
-                profile: $profile,
-                datasetLimit: $limit,
-            );
+        if ($folio) {
+            return $this->normalizeToFolio($io, $input, $core, $allCores, $rowLimit, $profile, $limit);
         }
 
-        // --folio is the full raw→folio chain: normalize → enrich (claims:fetch + fold whatever AI is
-        // ready) → build the folio. Enrich is a near-passthrough when there are no claims yet, so it's
-        // always safe to include — running it here means `data:norm <ds> --folio` reliably reflects the
-        // current AI without remembering a separate `dataset:assemble`. The build happens after enrich
-        // (folio:build consumes _folio), not after normalize.
-        $rc = $this->convertStage(
+        return $this->convertStage(
             $io,
-            ref: $ref,
-            provider: $provider,
+            ref: $input->dataset,
+            provider: $input->provider,
             stage: Stage::Normalize,
             core: $core ?? 'obj',
             allCores: $allCores,
             rowLimit: $rowLimit,
             profile: $profile,
             datasetLimit: $limit,
+            all: $input->all,
+        );
+    }
+
+    #[AsCommand('dataset:folio', 'Build a dataset/provider/all straight from raw: normalize → enrich (claims:fetch + fold current AI) → folio')]
+    public function folio(
+        SymfonyStyle $io,
+        #[MapInput] DatasetInputDTO $input,
+        #[Option('Build only this core stem (default: every core in _raw)')] ?string $core = null,
+        #[Option('Max collections to build in a fan-out (--provider/--all)')] ?int $limit = null,
+        #[Option('Max records per collection/core')] ?int $rowLimit = null,
+    ): int {
+        return $this->normalizeToFolio($io, $input, $core, $core === null, $rowLimit, false, $limit);
+    }
+
+    /**
+     * The shared raw→folio chain: normalize → enrich (inline claims:fetch pulls whatever AI is ready,
+     * then folds it) → folio:build. Enrich is a near-passthrough when there are no claims yet, so it's
+     * always safe to include; the build runs after enrich (folio:build consumes _folio), not after
+     * normalize. Backs both `dataset:normalize --folio` and `dataset:folio`.
+     */
+    private function normalizeToFolio(SymfonyStyle $io, DatasetInputDTO $input, ?string $core, bool $allCores, ?int $rowLimit, bool $profile, ?int $datasetLimit): int
+    {
+        $rc = $this->convertStage(
+            $io,
+            ref: $input->dataset,
+            provider: $input->provider,
+            stage: Stage::Normalize,
+            core: $core ?? 'obj',
+            allCores: $allCores,
+            rowLimit: $rowLimit,
+            profile: $profile,
+            datasetLimit: $datasetLimit,
+            all: $input->all,
         );
         if ($rc !== Command::SUCCESS) {
             return $rc;
@@ -119,15 +137,16 @@ final class DatasetStageCommands
 
         return $this->convertStage(
             $io,
-            ref: $ref,
-            provider: $provider,
+            ref: $input->dataset,
+            provider: $input->provider,
             stage: Stage::Enrich,
             core: $core ?? 'obj',
             allCores: $allCores,
             rowLimit: $rowLimit,
             folio: true,
             fetchClaims: true,
-            datasetLimit: $limit,
+            datasetLimit: $datasetLimit,
+            all: $input->all,
         );
     }
 
@@ -156,8 +175,7 @@ final class DatasetStageCommands
     )]
     public function assemble(
         SymfonyStyle $io,
-        #[Argument('Dataset key (provider/code) or a bare code (e.g. "victoria")')] ?string $ref = null,
-        #[Option('Fan out over every dataset for this provider (e.g. "smith")')] ?string $provider = null,
+        #[MapInput] DatasetInputDTO $input,
         #[Option('Core filename stem')] string $core = 'obj',
         #[Option('Convert every raw core for the dataset')] bool $allCores = false,
         #[Option('Max records to assemble (per dataset/core)')] ?int $limit = null,
@@ -166,14 +184,15 @@ final class DatasetStageCommands
     ): int {
         return $this->convertStage(
             $io,
-            ref: $ref,
-            provider: $provider,
+            ref: $input->dataset,
+            provider: $input->provider,
             stage: Stage::Enrich,
             core: $core,
             allCores: $allCores,
             rowLimit: $limit,
             folio: $folio,
             fetchClaims: !$skipClaimsFetch,
+            all: $input->all,
         );
     }
 
@@ -187,14 +206,13 @@ final class DatasetStageCommands
     #[AsCommand('dataset:profile', 'Profile a stage core into its SQL sidecar (→ <core>.jsonl.db)', aliases: ['dataset:prof'])]
     public function profile(
         SymfonyStyle $io,
-        #[Argument('Dataset key (provider/code) or a bare code (e.g. "victoria")')] ?string $ref = null,
-        #[Option('Fan out over every dataset for this provider (e.g. "smith")')] ?string $provider = null,
+        #[MapInput] DatasetInputDTO $input,
         #[Option('Core filename stem (the JSONL to profile)')] string $core = 'obj',
         #[Option('Stage JSONL to profile: normalize, raw, enrich')] string $stage = 'normalize',
     ): int {
         $stageEnum = Stage::fromKey($stage);
 
-        $keys = $this->resolveDatasetKeys($io, $ref, $provider);
+        $keys = $this->resolveDatasetKeys($io, $input->dataset, $input->provider, $input->all);
         if ($keys === null) {
             return Command::FAILURE;
         }
@@ -229,14 +247,14 @@ final class DatasetStageCommands
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
-    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $rowLimit = null, bool $profile = false, bool $folio = false, ?int $datasetLimit = null, bool $fetchClaims = false): int
+    private function convertStage(SymfonyStyle $io, ?string $ref, ?string $provider, Stage $stage, string $core, bool $allCores, ?int $rowLimit = null, bool $profile = false, bool $folio = false, ?int $datasetLimit = null, bool $fetchClaims = false, bool $all = false): int
     {
         if ($this->convert === null) {
             $io->error('This stage runs import:convert, which is unavailable (survos/import-bundle not installed).');
             return Command::FAILURE;
         }
 
-        $keys = $this->resolveDatasetKeys($io, $ref, $provider);
+        $keys = $this->resolveDatasetKeys($io, $ref, $provider, $all);
         if ($keys === null) {
             return Command::FAILURE;
         }
@@ -360,8 +378,12 @@ final class DatasetStageCommands
      *
      * @return list<string>|null
      */
-    private function resolveDatasetKeys(SymfonyStyle $io, ?string $ref, ?string $provider): ?array
+    private function resolveDatasetKeys(SymfonyStyle $io, ?string $ref, ?string $provider, bool $all = false): ?array
     {
+        if ($all) {
+            return $this->queryDatasetKeys($io, '1 = 1', [], 'all datasets');
+        }
+
         $provider = $provider !== null ? strtolower(trim($provider)) : '';
         if ($provider !== '') {
             return $this->queryDatasetKeys($io, 'd.datasetKey LIKE :p', ['p' => $provider . '/%'], sprintf('provider "%s"', $provider));
@@ -369,7 +391,7 @@ final class DatasetStageCommands
 
         $ref = trim((string) $ref);
         if ($ref === '') {
-            $io->error('Specify a dataset (provider/code or a bare code) or --provider=<code>.');
+            $io->error('Specify a dataset (provider/code or a bare code), --provider=<code>, or --all.');
             return null;
         }
 
