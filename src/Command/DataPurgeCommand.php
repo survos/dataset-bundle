@@ -15,7 +15,10 @@ use Symfony\Component\Finder\Finder;
 #[AsCommand('dataset:purge', 'Delete generated dataset artifacts')]
 final class DataPurgeCommand
 {
-    private const array GENERATED_STAGES = ['normalize', 'enriched', 'enrich_profile'];
+    // Stage dirs to remove (checked with is_dir). NOTE: only real Stage keys — Stage::fromKey()
+    // throws on anything else. 'enrich_profile' was invalid (the profile is a *file*, not a stage
+    // dir, and lives inside the enrich output anyway), so it broke purge entirely.
+    private const array GENERATED_STAGES = ['normalize', 'enriched'];
 
     public function __construct(
         private readonly DataPaths $paths,
