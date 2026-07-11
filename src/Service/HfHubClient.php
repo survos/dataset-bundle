@@ -30,6 +30,48 @@ final class HfHubClient
     }
 
     /**
+     * Create a new dataset repo. No-ops (returns false) if it already exists — HF's create
+     * endpoint 409s in that case, which we treat as "fine, keep going" rather than an error,
+     * so callers can unconditionally call this before uploadFiles() without a separate exists
+     * check racing against it.
+     *
+     * @param string $repo "namespace/name", e.g. "fortepan/bva" — namespace is the HF org or
+     *                     username (must already exist and the token must have write access to
+     *                     it; the HF API cannot create an *organization*, only repos within one).
+     * @return bool true if created, false if it already existed
+     */
+    public function createRepo(string $repo, bool $private = false): bool
+    {
+        if ($this->token === null || $this->token === '') {
+            throw new \RuntimeException('HF_TOKEN is required to create a repo. Set it in .env.local.');
+        }
+
+        [$namespace, $name] = array_pad(explode('/', $repo, 2), 2, null);
+        if ($namespace === null || $name === null) {
+            throw new \RuntimeException('Repo must be "namespace/name", got: ' . $repo);
+        }
+
+        $response = $this->httpClient->request('POST', sprintf('%s/api/repos/create', self::BASE), $this->auth([
+            'json' => [
+                'type' => 'dataset',
+                'organization' => $namespace,
+                'name' => $name,
+                'private' => $private,
+            ],
+        ]));
+
+        $status = $response->getStatusCode();
+        if ($status >= 200 && $status < 300) {
+            return true;
+        }
+        if ($status === 409) {
+            return false;
+        }
+
+        throw new \RuntimeException(sprintf('HF repo create failed (%d) for %s: %s', $status, $repo, $response->getContent(false)));
+    }
+
+    /**
      * List the files in a dataset repo at a revision.
      *
      * @return list<array{path: string, size: int}>
