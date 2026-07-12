@@ -5,6 +5,7 @@ namespace Survos\DatasetBundle\Service;
 
 use Psr\Log\LoggerInterface;
 use Survos\DatasetBundle\Enum\Stage;
+use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\JsonlBundle\IO\JsonlReader;
 use Survos\JsonlBundle\IO\JsonlWriter;
 use Survos\Lingua\Contracts\Dto\BatchRequest;
@@ -28,18 +29,45 @@ final class DatasetIntlService
         private readonly DataPaths $paths,
         private readonly LinguaClient $lingua,
         private readonly PhraseExtractor $phraseExtractor,
+        private readonly DatasetInfoRepository $datasets,
         ?LoggerInterface $logger = null,
     ) {
         unset($logger);
+    }
+
+    /**
+     * --targets/--engine, if passed, always win. Otherwise fall back to this dataset's
+     * _meta/dataset.json locale.targets/preferredEngine (DatasetInfo::$targetLocales/
+     * $preferredEngine, populated by data:scan-datasets), and only then to the hardcoded
+     * command default — so a dataset like mus/cazma (hr, deepl-only) doesn't need --targets=en
+     * --engine=deepl typed on every push/pull once its harvester's writeMeta() sets it once.
+     *
+     * @return array{targets: list<string>, engine: ?string}
+     */
+    private function resolveTargetsAndEngine(string $dataset, ?string $targetsArg, ?string $engineArg, string $targetsDefault, ?string $engineDefault = null): array
+    {
+        $info = $this->datasets->find($dataset);
+
+        $targets = $targetsArg !== null
+            ? $this->parseTargets($targetsArg)
+            : ($info?->targetLocales ?: $this->parseTargets($targetsDefault));
+
+        $engine = $engineArg ?? $info?->preferredEngine ?? $engineDefault;
+
+        return ['targets' => $targets, 'engine' => $engine];
     }
 
     #[AsCommand('dataset:intl:pull', 'fetch translations for a dataset from the Lingua server into 25_intl/tr.<locale>.jsonl')]
     public function pull(
         SymfonyStyle $io,
         #[Argument('dataset key, e.g. mus/larco')] string $dataset,
-        #[Option('comma-separated target locales (e.g. en,de,fr)')] string $targets = 'en',
-        #[Option('preferred engine filter (libre, deepl, …)')] ?string $engine = null,
+        #[Option('comma-separated target locales (e.g. en,de,fr) — defaults to the dataset\'s configured locale.targets')] ?string $targets = null,
+        #[Option('preferred engine filter (libre, deepl, …) — defaults to the dataset\'s configured locale.preferredEngine')] ?string $engine = null,
     ): int {
+        $resolved = $this->resolveTargetsAndEngine($dataset, $targets, $engine, 'en');
+        $targetLocales = $resolved['targets'];
+        $engine = $resolved['engine'];
+
         $intlDir = $this->paths->stageDir($dataset, Stage::Intl->value);
         if (!is_dir($intlDir)) {
             $io->error("No 25_intl directory for $dataset. Run import:convert --stage=normalize first.");
@@ -52,9 +80,8 @@ final class DatasetIntlService
             return Command::FAILURE;
         }
 
-        $targetLocales = $this->parseTargets($targets);
         if ($targetLocales === []) {
-            $io->error('No target locales. Pass --targets=en,de,…');
+            $io->error('No target locales. Pass --targets=en,de,… or set locale.targets in _meta/dataset.json.');
             return Command::INVALID;
         }
 
@@ -197,10 +224,14 @@ final class DatasetIntlService
     public function push(
         SymfonyStyle $io,
         #[Argument('dataset key, e.g. mus/larco')] string $dataset,
-        #[Option('comma-separated target locales (e.g. es,hu)')] string $targets = 'es,hu',
-        #[Option('preferred engine (libre, deepl, …)')] string $engine = 'libre',
+        #[Option('comma-separated target locales (e.g. es,hu) — defaults to the dataset\'s configured locale.targets')] ?string $targets = null,
+        #[Option('preferred engine (libre, deepl, …) — defaults to the dataset\'s configured locale.preferredEngine')] ?string $engine = null,
         #[Option('batch size per request')] int $batch = 200,
     ): int {
+        $resolved = $this->resolveTargetsAndEngine($dataset, $targets, $engine, 'es,hu', 'libre');
+        $targetLocales = $resolved['targets'];
+        $engine = $resolved['engine'];
+
         $intlDir = $this->paths->stageDir($dataset, Stage::Intl->value);
         $sourceFiles = glob("$intlDir/phrases.*.jsonl") ?: [];
         if ($sourceFiles === []) {
@@ -208,9 +239,8 @@ final class DatasetIntlService
             return Command::FAILURE;
         }
 
-        $targetLocales = $this->parseTargets($targets);
         if ($targetLocales === []) {
-            $io->error('No target locales. Pass --targets=es,hu,…');
+            $io->error('No target locales. Pass --targets=es,hu,… or set locale.targets in _meta/dataset.json.');
             return Command::INVALID;
         }
 

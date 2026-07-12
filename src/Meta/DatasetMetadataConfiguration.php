@@ -79,6 +79,7 @@ final class DatasetMetadataConfiguration implements ConfigurationInterface
                             ->scalarPrototype()->end()
                             ->defaultValue([])
                         ->end()
+                        ->scalarNode('preferredEngine')->defaultNull()->end()
                     ->end()
                 ->end()
 

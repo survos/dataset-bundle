@@ -93,6 +93,23 @@ final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \
     #[Field(searchable: true, sortable: true, filterable: true, facet: true, order: 50)]
     public ?string $locale = null;        // default locale: en | de | hu | etc.
 
+    /** From _meta/dataset.json's locale.targets — which locales dataset:intl:push/pull and
+     *  folio:build --locale should translate this dataset into. Empty means "not configured yet",
+     *  not "no translation wanted" — commands should fall back to their own --targets default.
+     *  @var list<string> */
+    #[ORM\Column(type: Types::JSON, options: ['default' => '[]'])]
+    #[Groups(['dataset:read'])]
+    #[Field(visible: false)]
+    public array $targetLocales = [];
+
+    /** From _meta/dataset.json's locale.preferredEngine — e.g. "deepl" for a source language
+     *  LibreTranslate doesn't support (see mus/cazma: hr isn't in babel.survos.com's language
+     *  list). Null defers to dataset:intl:push/pull's own --engine default. */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['dataset:read'])]
+    #[Field(searchable: true, filterable: true, facet: true, visible: false)]
+    public ?string $preferredEngine = null;
+
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
     #[Field(searchable: true, sortable: true, filterable: true, facet: true, order: 60)]

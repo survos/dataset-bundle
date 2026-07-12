@@ -102,6 +102,18 @@ class Artifact
     #[Groups(['artifact:read', 'dataset:read'])]
     public ?array $dtoCounts = null;
 
+    /**
+     * Locale-suffixed sibling builds actually on disk for this folio (e.g. "en" for
+     * mus/jarc.en.folio next to mus/jarc.folio) — set by ScanDatasetsCommand's folio-discovery
+     * pass. This is "what's built", distinct from DatasetInfo::$targetLocales ("what should be
+     * translated") — a target can exist before its folio is built, and a build can exist for a
+     * locale nobody configured as a target (a one-off folio:build --locale=X).
+     * @var list<string>
+     */
+    #[ORM\Column(type: Types::JSON, options: ['default' => '[]'])]
+    #[Groups(['artifact:read', 'dataset:read'])]
+    public array $availableLocales = [];
+
     /** @var array<string, mixed> */
     #[ORM\Column(type: Types::JSONB)]
     #[Groups(['artifact:read', 'dataset:read'])]

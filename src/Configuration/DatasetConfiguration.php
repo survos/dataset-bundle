@@ -687,6 +687,10 @@ final class LocaleConfiguration
     public function __construct(
         public readonly string $default = 'en',
         public readonly array $targets = [],
+        /** Preferred dataset:intl:push/pull engine (e.g. "libre", "deepl") — null defers to that
+         *  command's own default. Not every engine supports every source language (LibreTranslate's
+         *  self-hosted instance has no Croatian, for example), so this is per-dataset, not global. */
+        public readonly ?string $preferredEngine = null,
     ) {}
 
     public static function create(string $default = 'en'): self
@@ -696,12 +700,12 @@ final class LocaleConfiguration
 
     public function withDefault(string $default): self
     {
-        return new self(default: $default, targets: $this->targets);
+        return new self(default: $default, targets: $this->targets, preferredEngine: $this->preferredEngine);
     }
 
     public function withTargets(array $targets): self
     {
-        return new self(default: $this->default, targets: $targets);
+        return new self(default: $this->default, targets: $targets, preferredEngine: $this->preferredEngine);
     }
 
     public function addTarget(string $locale): self
@@ -710,14 +714,20 @@ final class LocaleConfiguration
             return $this;
         }
 
-        return new self(default: $this->default, targets: [...$this->targets, $locale]);
+        return new self(default: $this->default, targets: [...$this->targets, $locale], preferredEngine: $this->preferredEngine);
+    }
+
+    public function withPreferredEngine(?string $engine): self
+    {
+        return new self(default: $this->default, targets: $this->targets, preferredEngine: $engine);
     }
 
     public function toArray(): array
     {
         return [
-            'default' => $this->default,
-            'targets' => $this->targets,
+            'default'         => $this->default,
+            'targets'         => $this->targets,
+            'preferredEngine' => $this->preferredEngine,
         ];
     }
 
@@ -726,6 +736,7 @@ final class LocaleConfiguration
         return new self(
             default: $data['default'] ?? 'en',
             targets: $data['targets'] ?? [],
+            preferredEngine: $data['preferredEngine'] ?? null,
         );
     }
 }

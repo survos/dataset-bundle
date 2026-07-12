@@ -58,6 +58,27 @@ final class ScanDatasetsCommand extends DataCommand
         }
     }
 
+    /**
+     * "$provider/$code.folio" -> {datasetKey: "$provider/$code", locale: null}
+     * "$provider/$code.$locale.folio" -> {datasetKey: "$provider/$code", locale: "$locale"}
+     *
+     * $relative must already have its final ".folio" extension (callers strip ".gz" first for
+     * archives). Dataset codes are assumed dot-free — true of every source in this codebase
+     * today (jarc, cazma, bva, ...) — so "one segment before the extension" reliably means "no
+     * locale suffix" and "two segments" reliably means "locale, then code".
+     *
+     * @return array{datasetKey: string, locale: ?string}
+     */
+    private function parseFolioFilename(string $relative): array
+    {
+        $dir = dirname($relative);
+        $parts = explode('.', basename($relative));
+        array_pop($parts); // "folio"
+        $locale = count($parts) >= 2 ? array_pop($parts) : null;
+
+        return ['datasetKey' => $dir . '/' . implode('.', $parts), 'locale' => $locale];
+    }
+
     public function __invoke(
         SymfonyStyle $io,
         #[Option('Only scan this provider (e.g. fortepan, dc, pp)')] ?string $provider = null,
@@ -227,11 +248,25 @@ final class ScanDatasetsCommand extends DataCommand
 
         $io->text(sprintf('Phase 2: Found %d folio files and %d archives in %s', count($folioFiles), count($folioArchives), $folioPath));
 
-        $folioUpdated = 0;
+        // Base ("mus/jarc.folio") and locale-variant ("mus/jarc.en.folio") builds sit side by
+        // side in the same directory — split them first so the base pass never mistakes a
+        // variant for its own dataset (that produced a bogus "mus/jarc.en" DatasetInfo and, for
+        // any variant scanned before its base file, an unresolvable FolioService::context() call
+        // — RuntimeException: Folio file not found).
+        $baseFolioFiles = [];
+        $localeFolioFiles = [];
         foreach ($folioFiles as $dbFile) {
-            // Path is provider/dataset.folio - strip extension to get dataset key.
-            $relative   = substr($dbFile, strlen($folioPath) + 1);
-            $datasetKey = substr($relative, 0, -strlen('.folio'));
+            $relative = substr($dbFile, strlen($folioPath) + 1);
+            $parsed = $this->parseFolioFilename($relative);
+            if ($parsed['locale'] !== null) {
+                $localeFolioFiles[] = [$dbFile, $relative, $parsed['datasetKey'], $parsed['locale']];
+            } else {
+                $baseFolioFiles[] = [$dbFile, $relative, $parsed['datasetKey']];
+            }
+        }
+
+        $folioUpdated = 0;
+        foreach ($baseFolioFiles as [$dbFile, $relative, $datasetKey]) {
             $folioProviderCode = explode('/', $datasetKey, 2)[0];
             if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
                 continue;
@@ -289,10 +324,51 @@ final class ScanDatasetsCommand extends DataCommand
             $folioUpdated++;
         }
 
+        // Locale variants don't get their own DatasetInfo/Artifact — they're not a separate
+        // dataset, just another build of the same one. Record what's actually on disk onto the
+        // base folio's own Artifact (Artifact::$availableLocales), not the "should translate
+        // into" list a harvester configures (DatasetInfo::$targetLocales) — the two can and do
+        // disagree (a target with no build yet, or a one-off build for an unconfigured locale).
+        foreach ($localeFolioFiles as [$dbFile, $relative, $datasetKey, $locale]) {
+            $folioProviderCode = explode('/', $datasetKey, 2)[0];
+            if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
+                continue;
+            }
+
+            $baseInfo = $repo->find($datasetKey);
+            $artifact = $baseInfo instanceof DatasetInfo
+                ? $this->artifactRepository->findOneBy(['dataset' => $baseInfo, 'type' => Artifact::TYPE_FOLIO, 'code' => Artifact::CODE_DEFAULT])
+                : null;
+            if (!$artifact instanceof Artifact) {
+                // Base dataset/artifact not scanned this run (different --provider filter, or
+                // its own .folio is missing/not built yet) — picks up on a future scan once it
+                // exists. Not an error: a locale build with no base entry yet is a normal
+                // in-progress state, not a broken one.
+                continue;
+            }
+
+            if (!in_array($locale, $artifact->availableLocales, true)) {
+                $artifact->availableLocales[] = $locale;
+                sort($artifact->availableLocales);
+                $this->em->persist($artifact);
+                $folioUpdated++;
+            }
+        }
 
         foreach ($folioArchives as $archiveFile) {
             $relative = substr($archiveFile, strlen($folioPath) + 1);
-            $datasetKey = substr($relative, 0, -strlen('.folio'));
+            // Was -strlen('.folio') (6 chars), which under-strips a ".folio.gz" filename by 3
+            // chars (e.g. "mus/jarc.folio.gz" -> "mus/jarc.fo" instead of "mus/jarc"). Currently
+            // dormant — build_archive defaults off locally (survos_folio.yaml), so no .folio.gz
+            // exists yet to have hit this — but the same fix as the .folio loop above while here.
+            $parsed = $this->parseFolioFilename(substr($relative, 0, -strlen('.gz')));
+            if ($parsed['locale'] !== null) {
+                // Same as the .folio loop: a locale-variant archive isn't its own dataset. Not
+                // recorded onto Artifact::$availableLocales here (that's for browsable .folio
+                // builds) — revisit if/when locale-suffixed archives are actually produced.
+                continue;
+            }
+            $datasetKey = $parsed['datasetKey'];
             $folioProviderCode = explode('/', $datasetKey, 2)[0];
             if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
                 continue;
@@ -519,7 +595,9 @@ final class ScanDatasetsCommand extends DataCommand
         $info->label        = $meta['label'] ?? null;
         $info->description  = $meta['description'] ?? null;
         $info->aggregator   = $meta['aggregator'] ?? $info->provider();
-        $info->locale       = $meta['locale']['default'] ?? null;
+        $info->locale          = $meta['locale']['default'] ?? null;
+        $info->targetLocales   = $meta['locale']['targets'] ?? [];
+        $info->preferredEngine = $meta['locale']['preferredEngine'] ?? null;
         $info->country      = $meta['country']['iso2'] ?? null;
         $info->contactUrl   = $meta['contact']['url'] ?? null;
         $info->rightsUri    = $meta['rights']['default_uri'] ?? null;
