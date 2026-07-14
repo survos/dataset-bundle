@@ -693,9 +693,15 @@ final class LocaleConfiguration
         public readonly ?string $preferredEngine = null,
     ) {}
 
+    /**
+     * Non-English datasets default to targeting 'en' -- almost every dataset wants an English
+     * variant, and forgetting to call ->addTarget('en') silently means folio:build never
+     * produces one. Call ->withTargets([]) after create() to opt out (e.g. a dataset that's
+     * genuinely not ready for translation yet).
+     */
     public static function create(string $default = 'en'): self
     {
-        return new self(default: $default);
+        return new self(default: $default, targets: $default !== 'en' ? ['en'] : []);
     }
 
     public function withDefault(string $default): self
@@ -710,11 +716,20 @@ final class LocaleConfiguration
 
     public function addTarget(string $locale): self
     {
-        if (in_array($locale, $this->targets, true)) {
-            return $this;
+        return $this->addTargets([$locale]);
+    }
+
+    /** @param list<string> $locales */
+    public function addTargets(array $locales): self
+    {
+        $targets = $this->targets;
+        foreach ($locales as $locale) {
+            if (!in_array($locale, $targets, true)) {
+                $targets[] = $locale;
+            }
         }
 
-        return new self(default: $this->default, targets: [...$this->targets, $locale], preferredEngine: $this->preferredEngine);
+        return new self(default: $this->default, targets: $targets, preferredEngine: $this->preferredEngine);
     }
 
     public function withPreferredEngine(?string $engine): self

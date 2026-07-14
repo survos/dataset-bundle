@@ -113,6 +113,24 @@ final class DatasetRegistryUpdater
 
         $info->addArtifact($artifact);
         $this->entityManager->persist($artifact);
+
+        // A locale-coded artifact (e.g. code="en") is a translated variant of the same
+        // dataset+type, built by folio:build --locale. Record its existence on the
+        // DEFAULT-code sibling's availableLocales so consumers (zm's
+        // FolioRegistryService::sync(), the homepage) can discover it without enumerating
+        // every possible locale themselves.
+        if ($code !== Artifact::CODE_DEFAULT) {
+            $default = $this->artifactRepository->findOneBy([
+                'dataset' => $info,
+                'type' => $type,
+                'code' => Artifact::CODE_DEFAULT,
+            ]);
+            if ($default !== null && !in_array($code, $default->availableLocales, true)) {
+                $default->availableLocales = [...$default->availableLocales, $code];
+                $this->entityManager->persist($default);
+            }
+        }
+
         $this->updateStatus($info);
         $this->entityManager->flush();
 
