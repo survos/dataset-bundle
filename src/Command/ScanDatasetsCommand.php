@@ -241,7 +241,10 @@ final class ScanDatasetsCommand extends DataCommand
         // ── Phase 2: Scan folio DB directory — upsert Artifact rows ──────────
         $folioPath   = rtrim($folioDir ?? $this->dataPaths->folioRootDir, '/');
         $folioFiles  = glob($folioPath . '/*/*.folio') ?: [];
-        $folioArchives = glob($folioPath . '/*/*.folio.gz') ?: [];
+        // Archives live in their own sibling root (<root>/folio-archive — see
+        // DataPaths::folioArchiveFile), not next to the working folios.
+        $folioArchivePath = rtrim($this->dataPaths->folioArchiveRootDir, '/');
+        $folioArchives = glob($folioArchivePath . '/*/*.folio.gz') ?: [];
         $allowedProviders = $provider !== null && $provider !== ''
             ? [strtolower(trim($provider)) => true]
             : array_fill_keys($this->normalizedEnabledProviders(), true);
@@ -356,18 +359,8 @@ final class ScanDatasetsCommand extends DataCommand
         }
 
         foreach ($folioArchives as $archiveFile) {
-            $relative = substr($archiveFile, strlen($folioPath) + 1);
-            // Was -strlen('.folio') (6 chars), which under-strips a ".folio.gz" filename by 3
-            // chars (e.g. "mus/jarc.folio.gz" -> "mus/jarc.fo" instead of "mus/jarc"). Currently
-            // dormant — build_archive defaults off locally (survos_folio.yaml), so no .folio.gz
-            // exists yet to have hit this — but the same fix as the .folio loop above while here.
+            $relative = substr($archiveFile, strlen($folioArchivePath) + 1);
             $parsed = $this->parseFolioFilename(substr($relative, 0, -strlen('.gz')));
-            if ($parsed['locale'] !== null) {
-                // Same as the .folio loop: a locale-variant archive isn't its own dataset. Not
-                // recorded onto Artifact::$availableLocales here (that's for browsable .folio
-                // builds) — revisit if/when locale-suffixed archives are actually produced.
-                continue;
-            }
             $datasetKey = $parsed['datasetKey'];
             $folioProviderCode = explode('/', $datasetKey, 2)[0];
             if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
@@ -382,11 +375,15 @@ final class ScanDatasetsCommand extends DataCommand
             }
             $this->ensureInitialMarking($info);
 
+            // A locale-variant archive (mus/jarc.en.folio.gz) isn't its own dataset — it
+            // registers on the SAME datasetKey under its locale as the artifact code, the
+            // convention folio:build uses, so zm's archive API can list/serve every variant.
+            $artifactCode = $parsed['locale'] ?? Artifact::CODE_DEFAULT;
             $artifact = $this->artifactRepository->findOneBy([
                 'dataset' => $info,
                 'type' => Artifact::TYPE_FOLIO_ARCHIVE,
-                'code' => Artifact::CODE_DEFAULT,
-            ]) ?? new Artifact($info, Artifact::TYPE_FOLIO_ARCHIVE);
+                'code' => $artifactCode,
+            ]) ?? new Artifact($info, Artifact::TYPE_FOLIO_ARCHIVE, $artifactCode);
 
             $artifact->uri = $archiveFile;
             $artifact->sizeBytes = is_file($archiveFile) ? filesize($archiveFile) : null;
