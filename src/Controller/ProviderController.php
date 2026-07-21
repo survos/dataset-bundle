@@ -22,13 +22,21 @@ final class ProviderController extends AbstractController
     ) {
     }
 
-    #[Route('/providers', name: 'data_bundle_provider_index', methods: ['GET'])]
+    // priority: 20 on every route below — this controller's routes structurally collide with
+    // folio-bundle's FolioController, whose class-level `#[Route('/{folioCode}', ...)]` leaks in
+    // unprefixed on any app using Symfony's generic `resource: routing.controllers` loader
+    // (bypasses SurvosFolioBundle's own routes_enabled/route_prefix config entirely — a separate,
+    // deeper bug). E.g. `/providers/youtube` fits both this controller's literal route AND folio's
+    // `/{folioCode}/{coreCode}` pattern (folioCode=providers, coreCode=youtube); without an explicit
+    // priority above folio's default (0), folio's route won every tie, making this entire
+    // controller unreachable in any app with both bundles enabled (zm, md).
+    #[Route('/providers', name: 'data_bundle_provider_index', methods: ['GET'], priority: 20)]
     public function index(): Response
     {
         return $this->render('@SurvosDatasetBundle/provider/index.html.twig');
     }
 
-    #[Route('/providers/{provider}', name: 'data_bundle_provider_show', methods: ['GET'])]
+    #[Route('/providers/{provider}', name: 'data_bundle_provider_show', methods: ['GET'], priority: 20)]
     public function show(string $provider): Response
     {
         $providerCode = trim($provider);
@@ -54,7 +62,7 @@ final class ProviderController extends AbstractController
         ]);
     }
 
-    #[Route('/datasets/{provider}/{code}', name: 'data_bundle_dataset_show', requirements: ['code' => '.+'], methods: ['GET'])]
+    #[Route('/datasets/{provider}/{code}', name: 'data_bundle_dataset_show', requirements: ['code' => '.+'], methods: ['GET'], priority: 20)]
     public function dataset(string $provider, string $code): Response
     {
         $providerCode = strtolower(trim($provider));
