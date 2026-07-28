@@ -239,9 +239,11 @@ final class DataPaths
      * so sibling durable stages — e.g. AI `ai/claims` — live alongside `_raw` in the vault without
      * being dragged into the raw stage. See md/docs/data-layout.md.
      *
-     * Safe & idempotent: creates the vault dir, points (or re-points) the symlink. A pre-existing
-     * *non-empty real* `_raw` directory is left untouched — converting that is an explicit migration,
-     * not a silent side effect of asking for the path.
+     * No symlink: this hands back the VAULT path directly, so raw data always lives only in
+     * vault, never under work/ at all — `rm -rf work/<p>/<c>` (or the whole work/ tree) is always
+     * safe, with nothing to accidentally traverse into vault through. A pre-existing *non-empty
+     * real* `work/<p>/<c>/_raw` directory (legacy, pre-dating this) is left untouched — converting
+     * that is an explicit migration, not a silent side effect of asking for the path.
      */
     public function ensureRawPortal(string $datasetKey): string
     {
@@ -250,23 +252,14 @@ final class DataPaths
 
         $fs = $this->filesystem();
         $fs->mkdir($vaultDir);
-        $fs->mkdir(dirname($rawDir)); // work/<p>/<c>
 
         if (is_link($rawDir)) {
-            if (realpath($rawDir) === realpath($vaultDir)) {
-                return $rawDir; // already the correct portal
-            }
-            $fs->remove($rawDir); // wrong target → re-point
-        } elseif (is_dir($rawDir)) {
-            if (!$this->isDirEmpty($rawDir)) {
-                return $rawDir; // legacy real raw dir — leave for explicit migration
-            }
-            $fs->remove($rawDir);
+            $fs->remove($rawDir); // legacy symlink portal — no longer how this works, drop it
+        } elseif (is_dir($rawDir) && !$this->isDirEmpty($rawDir)) {
+            return $rawDir; // legacy real raw dir — leave for explicit migration
         }
 
-        $fs->symlink($vaultDir, $rawDir);
-
-        return $rawDir;
+        return $vaultDir;
     }
 
     private function isDirEmpty(string $dir): bool
@@ -328,13 +321,19 @@ final class DataPaths
     public function stageDir(string $datasetKey, Stage|string $stage, bool $create = false): string
     {
         $resolved = $stage instanceof Stage ? $stage : Stage::fromKey($stage); // unknown → throws
-        $path = $this->datasetDir($datasetKey) . '/' . $resolved->dir();
 
+        // Raw always resolves through vault, regardless of $create — unconditional, not gated on
+        // $create, because callers routinely compute this path in two separate steps (an explicit
+        // ensureRawPortal()/stageDir(..., create:true) call, then a later plain stageDir(..., 'raw')
+        // read with no $create) and both must return the same vault-backed path. Making this
+        // conditional on $create was the actual bug: the plain (no-create) read silently fell
+        // through to a disposable work/ path with nothing behind it.
+        if ($resolved === Stage::Raw) {
+            return $this->ensureRawPortal($datasetKey);
+        }
+
+        $path = $this->datasetDir($datasetKey) . '/' . $resolved->dir();
         if ($create) {
-            // Raw is a tier portal: materialize _raw as a symlink to the vault, not a real dir.
-            if ($resolved === Stage::Raw) {
-                return $this->ensureRawPortal($datasetKey);
-            }
             $this->filesystem()->mkdir($path);
         }
 
