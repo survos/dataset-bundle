@@ -380,13 +380,19 @@ final class DatasetStageCommands
      */
     private function resolveDatasetKeys(SymfonyStyle $io, ?string $ref, ?string $provider, bool $all = false): ?array
     {
-        if ($all) {
-            return $this->queryDatasetKeys($io, '1 = 1', [], 'all datasets');
-        }
-
+        // --provider always scopes, whether or not --all is ALSO passed -- combining them means
+        // "every dataset for this provider, no explicit ref needed", not "ignore the provider and
+        // return literally everything". This used to check $all first and return '1 = 1'
+        // unconditionally, so `--provider=curatescape --all` (exactly what bin/stories-rebuild.sh
+        // passes to dataset:normalize) silently discarded the provider scope and processed every
+        // dataset from every provider -- found via a real production run doing exactly that.
         $provider = $provider !== null ? strtolower(trim($provider)) : '';
         if ($provider !== '') {
             return $this->queryDatasetKeys($io, 'd.datasetKey LIKE :p', ['p' => $provider . '/%'], sprintf('provider "%s"', $provider));
+        }
+
+        if ($all) {
+            return $this->queryDatasetKeys($io, '1 = 1', [], 'all datasets');
         }
 
         $ref = trim((string) $ref);

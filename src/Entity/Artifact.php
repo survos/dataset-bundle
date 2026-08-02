@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
+use ApiPlatform\Doctrine\Orm\Filter\RangeFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
@@ -25,11 +27,28 @@ use Symfony\Component\Serializer\Attribute\Groups;
     operations: [
         new GetCollection(uriTemplate: '/artifacts', normalizationContext: ['groups' => ['artifact:read']]),
         new Get(uriTemplate: '/artifacts/{id}', normalizationContext: ['groups' => ['artifact:read']]),
+        // Scoped to type=folio_archive only (see FolioArchiveTypeExtension) -- the generic
+        // /artifacts collection above has no default type restriction, so an unfiltered request
+        // there returns every artifact type, including 'jsonl'/'report' rows whose `uri` is a raw
+        // local filesystem path. This is the endpoint a folio-browsing client should actually use:
+        // same Artifact data, same filters/pagination, but can never leak those other types.
+        new GetCollection(
+            uriTemplate: '/folio-archives',
+            name: 'folio_archives',
+            normalizationContext: ['groups' => ['artifact:read']],
+        ),
+        new Get(
+            uriTemplate: '/folio-archives/{id}',
+            name: 'folio_archive',
+            normalizationContext: ['groups' => ['artifact:read']],
+        ),
     ],
     normalizationContext: ['groups' => ['artifact:read']],
 )]
 #[ApiFilter(SearchFilter::class, properties: ['dataset.datasetKey' => 'partial', 'type' => 'exact', 'code' => 'exact', 'uri' => 'partial'])]
 #[ApiFilter(OrderFilter::class, properties: ['type', 'code', 'sizeBytes', 'rowCount', 'updatedAt'])]
+#[ApiFilter(RangeFilter::class, properties: ['sizeBytes', 'rowCount'])]
+#[ApiFilter(DateFilter::class, properties: ['updatedAt'])]
 class Artifact
 {
     public const TYPE_FOLIO = 'folio';

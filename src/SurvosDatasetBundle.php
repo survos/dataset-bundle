@@ -199,6 +199,14 @@ final class SurvosDatasetBundle extends AbstractBundle
             ->public()
             ->tag('kernel.event_listener', ['event' => DatasetArtifactUpdatedEvent::class]);
 
+        // Scopes Artifact's /folio-archives collection to type=folio_archive -- see the class
+        // docblock. autoconfigure() picks up API Platform's own registerForAutoconfiguration()
+        // tag for QueryCollectionExtensionInterface, no explicit tag needed here.
+        $services->set(\Survos\DatasetBundle\Doctrine\FolioArchiveTypeExtension::class)
+            ->autowire()
+            ->autoconfigure()
+            ->public();
+
         if (class_exists(\Survos\ImportBundle\Event\ImportConvertFinishedEvent::class)) {
             $services->set(DatasetRegistryImportConvertListener::class)
                 ->autowire()
