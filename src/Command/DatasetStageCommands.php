@@ -350,10 +350,22 @@ final class DatasetStageCommands
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
-    /** Cheap "has this dataset been fetched?" probe: any *.jsonl(.gz) in its _raw dir. */
+    /**
+     * Cheap "has this dataset been fetched?" probe: any *.jsonl(.gz) in its _raw dir.
+     *
+     * Deliberately uses DataPaths::stageDir() directly, NOT DatasetPaths::rawDir --
+     * DataPaths::stageDir() redirects Stage::Raw through ensureRawPortal() to the durable vault
+     * location where raw data actually lives once scraped (Curatescape's provider, among others,
+     * writes straight there). DatasetPaths::rawDir does a naive work-dir join instead -- a
+     * portal path some importers write scratch data into before promotion, not where finished raw
+     * cores end up -- so checking it here always returned false and made every fan-out dataset
+     * look unfetched even right after a real scrape: confirmed via a production run where
+     * provider:curatescape:raw wrote raw data for all 7 sites and this fan-out then skipped all 7
+     * as "no raw yet".
+     */
     private function hasRawCore(string $datasetKey): bool
     {
-        $rawDir = (new DatasetPaths($this->dataPaths, $datasetKey))->rawDir;
+        $rawDir = $this->dataPaths->stageDir($datasetKey, Stage::Raw);
         if (!is_dir($rawDir)) {
             return false;
         }
