@@ -10,6 +10,7 @@ use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\ImportBundle\Event\ImportConvertFinishedEvent;
 use Survos\ImportBundle\Event\ImportConvertRowEvent;
 use Survos\ImportBundle\Event\ImportConvertStartedEvent;
+use Survos\FieldBundle\Attribute\Map;
 use Survos\JsonlBundle\IO\JsonlWriter;
 use Survos\Lingua\Contracts\Util\TranslatableReflector;
 use Survos\Lingua\Core\Identity\HashUtil;
@@ -78,16 +79,68 @@ final class PhraseExtractor
         }
 
         foreach (TranslatableReflector::fieldsFor($dtoClass) as $field) {
-            $text = $normalizedRow[$field] ?? null;
-            if (!is_string($text)) {
+            $value = $this->resolveMappedValue($normalizedRow, $dtoClass, $field);
+
+            // list<string> fields (e.g. BaseItemDto::$tags) -- each element is its own phrase,
+            // registered under the same content hash a term label with identical text would get
+            // (HashUtil::calcSourceKey is a pure function of text+locale), so tags that are also
+            // extracted as term labels share translations instead of double-requesting them.
+            if (is_array($value)) {
+                foreach ($value as $item) {
+                    if (!is_string($item)) {
+                        continue;
+                    }
+                    $item = trim($item);
+                    if ($item !== '') {
+                        $this->register($item, $field);
+                    }
+                }
                 continue;
             }
-            $text = trim($text);
+
+            if (!is_string($value)) {
+                continue;
+            }
+            $text = trim($value);
             if ($text === '') {
                 continue;
             }
             $this->register($text, $field);
         }
+    }
+
+    /**
+     * A #[Translatable] field's normalized-row key isn't always its own property name --
+     * #[Map(source: [...])] declares aliases (e.g. BaseItemDto::$tags reads either 'tags' or
+     * the legacy 'source_tags' key a *SetRecordListener still writes). Check each declared
+     * alias in priority order before falling back to the bare field name.
+     */
+    private function resolveMappedValue(array $row, string $dtoClass, string $field): mixed
+    {
+        foreach ($this->mapSourcesFor($dtoClass, $field) as $key) {
+            if (array_key_exists($key, $row)) {
+                return $row[$key];
+            }
+        }
+
+        return $row[$field] ?? null;
+    }
+
+    /** @return list<string> */
+    private function mapSourcesFor(string $dtoClass, string $field): array
+    {
+        try {
+            $property = new \ReflectionProperty($dtoClass, $field);
+        } catch (\ReflectionException) {
+            return [];
+        }
+
+        $sources = [];
+        foreach ($property->getAttributes(Map::class) as $attribute) {
+            $sources = [...$sources, ...$attribute->newInstance()->sources()];
+        }
+
+        return $sources;
     }
 
     /**
