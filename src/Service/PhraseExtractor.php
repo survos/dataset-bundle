@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\DatasetBundle\Service;
 
 use Psr\Log\LoggerInterface;
+use Survos\DataContracts\Attribute\PropertyMeta;
 use Survos\DataContracts\Metadata\ContentType;
 use Survos\DatasetBundle\Enum\Stage;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
@@ -33,15 +34,23 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
  * are not supported.
  *
  * Output row shape:
- *   ['code' => xxh3_hex, 'locale' => sourceLocale, 'text' => string, 'sources' => list<string>]
+ *   ['code' => xxh3_hex, 'locale' => sourceLocale, 'text' => string, 'sources' => list<string>, 'facet' => bool]
  *
  * `sources` records which DTO fields or term sets contributed the same phrase
- * — useful for debugging / future per-context splitting; ignored by downstream
- * consumers today.
+ * — useful for debugging / future per-context splitting.
+ *
+ * `facet` is true when at least one contributing source is a controlled-vocabulary
+ * field (#[PropertyMeta(facet: true)] on the DTO, or a term label via
+ * acceptTermLabel()) rather than free text (title, description, ...). Consumed by
+ * FolioIngestService::ingestTermTranslations() to skip per-item free-text content
+ * that dwarfs the actual term vocabulary at full-archive scale (measured: 90% of
+ * mus/fortepan's phrases.hu.jsonl was $description, not $tags, 2026-08-04) — that
+ * content is handled by the separate localized-folio-build pipeline instead
+ * (folio:build --locale), not this term-label-focused one.
  */
 final class PhraseExtractor
 {
-    /** @var array<string, array{locale:string, text:string, sources:list<string>}> hash => row */
+    /** @var array<string, array{locale:string, text:string, sources:list<string>, facet:bool}> hash => row */
     private array $phrases = [];
     private ?string $dataset = null;
     private ?string $sourceLocale = null;
@@ -80,6 +89,7 @@ final class PhraseExtractor
 
         foreach (TranslatableReflector::fieldsFor($dtoClass) as $field) {
             $value = $this->resolveMappedValue($normalizedRow, $dtoClass, $field);
+            $isFacet = $this->isFacetField($dtoClass, $field);
 
             // list<string> fields (e.g. BaseItemDto::$tags) -- each element is its own phrase,
             // registered under the same content hash a term label with identical text would get
@@ -92,7 +102,7 @@ final class PhraseExtractor
                     }
                     $item = trim($item);
                     if ($item !== '') {
-                        $this->register($item, $field);
+                        $this->register($item, $field, $isFacet);
                     }
                 }
                 continue;
@@ -105,8 +115,26 @@ final class PhraseExtractor
             if ($text === '') {
                 continue;
             }
-            $this->register($text, $field);
+            $this->register($text, $field, $isFacet);
         }
+    }
+
+    /** True for controlled-vocabulary fields (#[PropertyMeta(facet: true)]), false for free text. */
+    private function isFacetField(string $dtoClass, string $field): bool
+    {
+        try {
+            $property = new \ReflectionProperty($dtoClass, $field);
+        } catch (\ReflectionException) {
+            return false;
+        }
+
+        foreach ($property->getAttributes(PropertyMeta::class) as $attribute) {
+            if ($attribute->newInstance()->facet) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -157,7 +185,8 @@ final class PhraseExtractor
         if ($label === '') {
             return;
         }
-        $this->register($label, $setCode !== null ? "term:$setCode" : 'term');
+        // Always facet=true: a term label is controlled vocabulary by definition.
+        $this->register($label, $setCode !== null ? "term:$setCode" : 'term', true);
     }
 
     /** Writes the accumulator to disk and clears state. Returns count written. */
@@ -241,7 +270,7 @@ final class PhraseExtractor
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private function register(string $text, string $source): void
+    private function register(string $text, string $source, bool $isFacet): void
     {
         $code = HashUtil::calcSourceKey($text, $this->sourceLocale);
         if (!isset($this->phrases[$code])) {
@@ -249,6 +278,7 @@ final class PhraseExtractor
                 'locale'  => $this->sourceLocale,
                 'text'    => $text,
                 'sources' => [$source],
+                'facet'   => $isFacet,
             ];
             return;
         }
@@ -256,6 +286,9 @@ final class PhraseExtractor
         if (!in_array($source, $this->phrases[$code]['sources'], true)) {
             $this->phrases[$code]['sources'][] = $source;
         }
+        // Identical text can come from both a facet field and free text (e.g. a tag value that
+        // also happens to appear in a description) -- true if any source is a facet field.
+        $this->phrases[$code]['facet'] = $this->phrases[$code]['facet'] || $isFacet;
     }
 
     private function resolveSourceLocale(string $datasetKey): string
