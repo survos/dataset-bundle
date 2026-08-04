@@ -32,10 +32,13 @@ use Survos\ImportBundle\Contract\DatasetContextInterface;
 use Survos\ImportBundle\Contract\DatasetPathsFactoryInterface;
 use Survos\Kit\Traits\HasConfigurableRoutes;
 use Survos\MeiliBundle\SurvosMeiliBundle;
+use Survos\GeonamesBundle\Service\GeoService;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Kernel\RequiredBundle;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 
 #[RequiredBundle(SurvosMeiliBundle::class, ignoreOnInvalid: true)]
@@ -223,10 +226,15 @@ final class SurvosDatasetBundle extends AbstractBundle
         }
 
         if (class_exists(\Survos\LinguaBundle\Service\LinguaClient::class)) {
+            // GeoService is optional (NULL_ON_INVALID_REFERENCE): dataset:intl:push/pull work with
+            // Lingua alone even when survos/geonames-bundle isn't installed — geonames resolution
+            // for place-name phrases is a bonus DatasetIntlService::resolvePlace() skips
+            // gracefully when null, not a hard requirement for the whole command to exist.
             $services->set(DatasetIntlService::class)
                 ->autowire()
                 ->autoconfigure()
-                ->public();
+                ->public()
+                ->arg('$geoService', new Reference(GeoService::class, ContainerInterface::NULL_ON_INVALID_REFERENCE));
         }
 
         $services->set(DatasetInfoRepository::class)

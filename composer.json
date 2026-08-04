@@ -39,11 +39,13 @@
         "survos/folio-bundle": "^2.5",
         "survos/tabler-bundle": "^2.5",
         "survos/lingua-bundle": "^2.5",
+        "survos/geonames-bundle": "^2.5",
         "survos/meili-bundle": "^2.5",
         "meilisearch/meilisearch-php": "dev-main"
     },
     "suggest": {
-        "survos/ai-workflow-bundle": "Wires DatasetIterateRowEvent \u2192 Subject creation for AI workflow pipelines"
+        "survos/ai-workflow-bundle": "Wires DatasetIterateRowEvent \u2192 Subject creation for AI workflow pipelines",
+        "survos/geonames-bundle": "dataset:intl:push resolves place-name phrases via GeoService::alternateNames() instead of routing them through Lingua's MT"
     },
     "prefer-stable": true,
     "extra": {

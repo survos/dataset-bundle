@@ -6,6 +6,8 @@ namespace Survos\DatasetBundle\Service;
 use Psr\Log\LoggerInterface;
 use Survos\DatasetBundle\Enum\Stage;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
+use Survos\GeonamesBundle\Dto\GeoRecord;
+use Survos\GeonamesBundle\Service\GeoService;
 use Survos\JsonlBundle\IO\JsonlReader;
 use Survos\JsonlBundle\IO\JsonlWriter;
 use Survos\Lingua\Contracts\Dto\BatchRequest;
@@ -22,6 +24,13 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * Reads <dataset>/25_intl/phrases.<sourceLocale>.jsonl, queries the Lingua
  * server for translations, and writes <dataset>/25_intl/tr.<targetLocale>.jsonl
  * with matched results.
+ *
+ * push() also tries geonames-bundle before Lingua for each phrase (survos-sites/musdig#31):
+ * a bare proper noun like a Chilean place name ("santiago") isn't really a "translation" task,
+ * and geonames-bundle's alternateNames() is real authoritative locale-tagged data rather than a
+ * machine-translation guess. See resolvePlace()/mergeTranslationRows() below. $geoService is
+ * optional (SurvosDatasetBundle wires it NULL_ON_INVALID_REFERENCE) -- push()/pull() work with
+ * Lingua alone when survos/geonames-bundle isn't installed, geonames resolution is a bonus.
  */
 final class DatasetIntlService
 {
@@ -30,6 +39,7 @@ final class DatasetIntlService
         private readonly LinguaClient $lingua,
         private readonly PhraseExtractor $phraseExtractor,
         private readonly DatasetInfoRepository $datasets,
+        private readonly ?GeoService $geoService = null,
         ?LoggerInterface $logger = null,
     ) {
         unset($logger);
@@ -112,19 +122,21 @@ final class DatasetIntlService
         foreach ($targetLocales as $locale) {
             $map = $this->lingua->pullBabelByHashes($codes, locale: $locale, engine: $engine);
             $outFile = "$intlDir/tr.$locale.jsonl";
-            $writer  = JsonlWriter::open($outFile);
-            $written = 0;
-            try {
-                foreach ($map as $code => $text) {
-                    if ($text === '') {
-                        continue;
-                    }
-                    $writer->write(['code' => $code, 'locale' => $locale, 'text' => $text]);
-                    $written++;
+
+            $rows = [];
+            foreach ($map as $code => $text) {
+                if ($text === '') {
+                    continue;
                 }
-            } finally {
-                $writer->close();
+                $rows[] = ['code' => (string) $code, 'locale' => $locale, 'text' => $text];
             }
+            // Merge, not truncate-and-write: push() may have already written geonames-resolved
+            // rows into this same file for codes Lingua was never even asked about (deliberately
+            // excluded from the batch it queued) -- a plain overwrite here would silently delete
+            // them on every re-pull. See mergeTranslationRows().
+            $this->mergeTranslationRows($outFile, $rows);
+            $written = count($rows);
+
             $missing = count($codes) - $written;
             $io->writeln(sprintf(
                 '  %s: <info>%d</info> translated, %d missing → %s',
@@ -244,26 +256,58 @@ final class DatasetIntlService
             return Command::INVALID;
         }
 
+        $countryCode = $this->datasets->find($dataset)?->country;
+
         $totalSent = 0;
+        $totalGeoResolved = 0;
         foreach ($sourceFiles as $file) {
             if (!preg_match('/phrases\.([a-zA-Z_-]+)\.jsonl$/', $file, $m)) {
                 continue;
             }
             $sourceLocale = $m[1];
 
+            // code => text, not just unique texts: geonames resolution and tr.<locale>.jsonl rows
+            // both key on the phrase code, and PhraseExtractor already dedupes by content hash
+            // within one source-locale file, so code<->text is already 1:1 here.
             $texts = [];
+            /** @var array<string, list<array{code: string, locale: string, text: string}>> $geoResolvedByLocale */
+            $geoResolvedByLocale = [];
             foreach (JsonlReader::open($file) as $row) {
-                if (isset($row['text']) && is_string($row['text']) && $row['text'] !== '') {
-                    $texts[] = $row['text'];
+                $code = isset($row['code']) ? (string) $row['code'] : '';
+                $text = $row['text'] ?? null;
+                if ($code === '' || !is_string($text) || $text === '') {
+                    continue;
                 }
+
+                $place = null !== $countryCode ? $this->resolvePlace($text, $countryCode) : null;
+                if (null !== $place) {
+                    $alternateNames = $this->geoAlternateNames($place->geonameId, $countryCode);
+                    foreach ($targetLocales as $targetLocale) {
+                        $geoResolvedByLocale[$targetLocale][] = [
+                            'code' => $code,
+                            'locale' => $targetLocale,
+                            // Prefer a real locale-tagged alternate name; a place with no recorded
+                            // variant in this language almost always looks the same or close enough
+                            // across languages anyway — safer than routing a proper noun through MT.
+                            'text' => $alternateNames[$targetLocale][0] ?? $place->name,
+                        ];
+                    }
+                    $totalGeoResolved++;
+                    continue; // never queued for Lingua
+                }
+
+                $texts[$code] = $text;
             }
-            $texts = array_values(array_unique($texts));
+
+            foreach ($geoResolvedByLocale as $targetLocale => $rows) {
+                $this->mergeTranslationRows("$intlDir/tr.$targetLocale.jsonl", $rows);
+            }
 
             if ($texts === []) {
                 continue;
             }
 
-            foreach (array_chunk($texts, $batch) as $chunk) {
+            foreach (array_chunk(array_values($texts), $batch) as $chunk) {
                 $this->lingua->requestBatch(new BatchRequest(
                     source: $sourceLocale,
                     target: $targetLocales,
@@ -273,7 +317,11 @@ final class DatasetIntlService
                 $totalSent += count($chunk);
             }
 
-            $io->writeln(sprintf('  %s: <info>%d</info> phrase(s) sent', $sourceLocale, count($texts)));
+            $io->writeln(sprintf('  %s: <info>%d</info> phrase(s) sent to Lingua', $sourceLocale, count($texts)));
+        }
+
+        if ($totalGeoResolved > 0) {
+            $io->writeln(sprintf('  <info>%d</info> phrase(s) resolved via geonames instead (no Lingua request)', $totalGeoResolved));
         }
 
         $io->success(sprintf(
@@ -290,5 +338,70 @@ final class DatasetIntlService
     {
         $parts = preg_split('/[,\s]+/', trim($targets)) ?: [];
         return array_values(array_unique(array_filter(array_map('trim', $parts))));
+    }
+
+    /**
+     * Resolve $text as a place name within $countryCode via geonames-bundle, tolerating a
+     * missing/unfetched authority database (GeoService throws RuntimeException when the relevant
+     * <countryCode>.sqlite hasn't been downloaded) — falls through to Lingua for that phrase
+     * rather than crashing the whole push for datasets/countries geonames hasn't been fetched for.
+     */
+    private function resolvePlace(string $text, string $countryCode): ?GeoRecord
+    {
+        if (null === $this->geoService) {
+            return null;
+        }
+        try {
+            return $this->geoService->find($text, $countryCode);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** @return array<string, list<string>> */
+    private function geoAlternateNames(int $geonameId, string $countryCode): array
+    {
+        if (null === $this->geoService) {
+            return [];
+        }
+        try {
+            return $this->geoService->alternateNames($geonameId, $countryCode);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Merges $newRows into an existing tr.<locale>.jsonl file, keyed by phrase code -- new rows win
+     * per code, everything else already on disk is preserved. Used by both push() (writing
+     * geonames-resolved place names) and pull() (writing Lingua's MT results) so neither ever
+     * blindly truncates the other's already-resolved codes: without this, a push() that resolves
+     * "santiago" via geonames would have its result silently wiped by the next pull(), which
+     * previously always opened its output file in truncate mode.
+     *
+     * @param list<array{code: string, locale: string, text: string}> $newRows
+     */
+    private function mergeTranslationRows(string $path, array $newRows): void
+    {
+        $rows = [];
+        if (is_file($path)) {
+            foreach (JsonlReader::open($path) as $row) {
+                if (isset($row['code'])) {
+                    $rows[(string) $row['code']] = $row;
+                }
+            }
+        }
+        foreach ($newRows as $row) {
+            $rows[$row['code']] = $row;
+        }
+
+        $writer = JsonlWriter::open($path, 'w');
+        try {
+            foreach ($rows as $row) {
+                $writer->write($row);
+            }
+        } finally {
+            $writer->close();
+        }
     }
 }
