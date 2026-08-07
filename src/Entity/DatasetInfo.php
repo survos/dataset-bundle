@@ -56,6 +56,15 @@ final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \
     use RouteIdentityTrait;
     // Workflow lifecycle place (meta → raw → normalize → enrich → folio) — see app IDatasetWorkflow.
     use MarkingTrait;
+
+    /**
+     * Keyed by phase (transition name): ['observe' => ['task_a'], 'analyze' => ['task_b']].
+     * Only meaningful when survos/ai-workflow-bundle is installed (optional dep, see composer.json
+     * suggest) -- kept local rather than importing AiWorkflowBundle's PendingStepsTrait so apps that
+     * use dataset-bundle without ai-workflow-bundle (openfoto, zm) don't get a hard class dependency.
+     */
+    #[ORM\Column(type: Types::JSON, options: ['default' => '{}'])]
+    public array $pendingSteps = [];
     #[ORM\Id]
     #[ORM\Column(type: Types::STRING, length: 128)]
     #[Groups(['dataset:read'])]
