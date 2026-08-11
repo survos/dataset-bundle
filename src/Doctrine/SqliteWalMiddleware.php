@@ -10,11 +10,14 @@ use Doctrine\DBAL\Driver\Middleware;
 use Doctrine\DBAL\Driver\Middleware\AbstractDriverMiddleware;
 
 /**
- * Runs WAL-mode pragmas on every new SQLite connection.
+ * Runs WAL-mode + integrity pragmas on every new SQLite connection.
  *
  * WAL:              concurrent readers + writer without lock contention.
  * busy_timeout:     wait up to 30 s before "database is locked".
  * synchronous=NORMAL: safe durability, cheaper than FULL.
+ * foreign_keys=ON:  SQLite doesn't enforce FKs (incl. onDelete: CASCADE) unless told to per
+ *                   connection — without this, deleting a DatasetInfo row silently leaves
+ *                   orphaned Artifact rows behind instead of cascading or refusing the delete.
  *
  * Register as a doctrine.middleware service (see SurvosDatasetBundle).
  */
@@ -31,6 +34,7 @@ final class SqliteWalMiddleware implements Middleware
                     $connection->exec('PRAGMA journal_mode=WAL');
                     $connection->exec('PRAGMA busy_timeout=30000');
                     $connection->exec('PRAGMA synchronous=NORMAL');
+                    $connection->exec('PRAGMA foreign_keys=ON');
                 }
 
                 return $connection;
