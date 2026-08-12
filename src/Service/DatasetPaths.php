@@ -74,9 +74,7 @@ final class DatasetPaths
      */
     public function stageDir(Stage|string $stage): string
     {
-        $resolved = $stage instanceof Stage ? $stage : Stage::fromKey($stage); // unknown → throws
-
-        return "{$this->dir}/{$resolved->dir()}";
+        return $this->paths->stageDir($this->datasetKey, $stage);
     }
 
     // ---- Convenience: raw filename normalization ----

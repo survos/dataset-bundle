@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Survos\DatasetBundle\Enum\Stage;
 use Survos\DatasetBundle\Service\DataPaths;
 use Survos\DatasetBundle\Service\DatasetPaths;
+use Symfony\Component\Filesystem\Filesystem;
 
 final class DataPathsTest extends TestCase
 {
@@ -46,13 +47,13 @@ final class DataPathsTest extends TestCase
     #[Test]
     public function datasetPathsResolveStageDirectoriesAndFiles(): void
     {
+        // Non-raw stages never touch the filesystem, so an unwritable root is fine here.
         $paths = new DataPaths('/srv/app-data');
         $dataset = new DatasetPaths($paths, 'dc/tb09jw350');
 
         self::assertSame('dc-tb09jw350', $dataset->key);
         self::assertSame('/srv/app-data/work/dc/tb09jw350', $dataset->dir);
         self::assertSame('/srv/app-data/work/dc/tb09jw350/_meta', $dataset->metaDir);
-        self::assertSame('/srv/app-data/work/dc/tb09jw350/_raw', $dataset->rawDir);
         self::assertSame('/srv/app-data/work/dc/tb09jw350/extract', $dataset->extractDir);
         self::assertSame('/srv/app-data/work/dc/tb09jw350/norm', $dataset->normalizeDir);
         self::assertSame('/srv/app-data/work/dc/tb09jw350/voc', $dataset->termsDir);
@@ -71,5 +72,32 @@ final class DataPathsTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $paths->providerArchiveFile('dc', '../escape.jsonl');
+    }
+
+    /**
+     * Regression test for survos-sites/musdig#37: DatasetPaths::stageDir()/rawDir/rawFile()
+     * used to reimplement stage-directory resolution instead of delegating to
+     * DataPaths::stageDir(), so Stage::Raw silently skipped the vault-portal
+     * resolution DataPaths::stageDir() does via ensureRawPortal() and always
+     * returned a plain work/ path — even when a durable vault copy existed.
+     */
+    #[Test]
+    public function rawDirAndRawFileResolveThroughTheVaultPortalLikeDataPaths(): void
+    {
+        $root = sys_get_temp_dir() . '/dataset-bundle-test-' . bin2hex(random_bytes(6));
+
+        try {
+            $paths = new DataPaths($root);
+            $dataset = new DatasetPaths($paths, 'dc/tb09jw350');
+
+            $expected = "{$root}/vault/dc/tb09jw350/_raw";
+
+            self::assertSame($expected, $paths->stageDir('dc/tb09jw350', Stage::Raw));
+            self::assertSame($expected, $dataset->stageDir(Stage::Raw));
+            self::assertSame($expected, $dataset->rawDir);
+            self::assertSame("{$expected}/obj.jsonl", $dataset->rawFile('obj.jsonl'));
+        } finally {
+            (new Filesystem())->remove($root);
+        }
     }
 }
