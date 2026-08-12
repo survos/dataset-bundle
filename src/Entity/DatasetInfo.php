@@ -300,9 +300,29 @@ final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \
     public function hasNormalized(): bool { return ($this->normalizedCount ?? 0) >= 1; }
     public function hasProfile(): bool    { return $this->profilePath !== null; }
 
-    public function hasArtifact(string $type): bool
+    public function hasArtifact(string $type, string $code = Artifact::CODE_DEFAULT): bool
     {
-        return $this->artifact($type) !== null;
+        return $this->artifact($type, $code) !== null;
+    }
+
+    /** EL guard example: subject.pendingFolioLocaleCount() > 0 */
+    public function pendingFolioLocaleCount(): int
+    {
+        return count(array_filter(
+            $this->targetLocales,
+            fn (string $locale): bool => !$this->hasArtifact(Artifact::TYPE_FOLIO, $locale),
+        ));
+    }
+
+    public function nextPendingFolioLocale(): ?string
+    {
+        foreach ($this->targetLocales as $locale) {
+            if (!$this->hasArtifact(Artifact::TYPE_FOLIO, $locale)) {
+                return $locale;
+            }
+        }
+
+        return null;
     }
 
     /** Whether a compressed (.gz) folio archive exists for this dataset — shown as a download icon. */
