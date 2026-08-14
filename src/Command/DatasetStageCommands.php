@@ -116,9 +116,28 @@ final class DatasetStageCommands
      * then folds it) → folio:build. Enrich is a near-passthrough when there are no claims yet, so it's
      * always safe to include; the build runs after enrich (folio:build consumes _folio), not after
      * normalize. Backs both `dataset:normalize --folio` and `dataset:folio`.
+     *
+     * @deprecated Two synchronous, in-process, all-or-nothing fan-out passes over --provider/--all —
+     * bypasses DatasetInfo's marking/workflow entirely, so one dataset failing to normalize silently
+     * skips folio-building for every OTHER dataset in the fan-out too (discovered via survos-sites/musdig,
+     * a Smithsonian --provider run where this made every unit's folio stay stale with no error shown).
+     * Prefer the real per-dataset, resilient, async workflow (IDatasetWorkflow/DatasetFlow, already
+     * built): `state:iterate DatasetInfo -m new -t raw --filter="aggregator=<provider>" --em=dataset`
+     * (add --sync to run inline for debugging one dataset). Kept working for now; will be removed.
      */
     private function normalizeToFolio(SymfonyStyle $io, DatasetInputDTO $input, ?string $core, bool $allCores, ?int $rowLimit, bool $profile, ?int $datasetLimit): int
     {
+        $io->warning(
+            'dataset:normalize --folio / dataset:folio are deprecated: they run normalize then enrich+build '
+            . 'as two synchronous, all-or-nothing fan-out passes that bypass DatasetInfo\'s marking/workflow — '
+            . 'one dataset failing to normalize silently skips folio-building for the ENTIRE fan-out. Prefer the '
+            . "real, per-dataset, resilient async workflow instead:\n"
+            . '  state:iterate DatasetInfo -m new -t raw --filter="aggregator=<provider>" --em=dataset'
+            . " [--sync]\n"
+            . '(harvest: see castor.php\'s folio:raw / folio:one / folio:provider tasks). This command still '
+            . 'works for now but will eventually be removed.'
+        );
+
         $rc = $this->convertStage(
             $io,
             ref: $input->dataset,

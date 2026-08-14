@@ -122,6 +122,7 @@ final class DataPaths
     public string $cacheRootDir { get => "{$this->root}/{$this->cacheRoot}"; }
     public string $folioRootDir { get => "{$this->root}/folio"; }
     public string $folioArchiveRootDir { get => "{$this->root}/folio-archive"; }
+    public string $folioBareRootDir { get => "{$this->root}/folio-bare"; }
     public string $zipsRootDir {
         get => str_starts_with($this->zipsRoot, '/')
             ? rtrim($this->zipsRoot, '/')
@@ -292,6 +293,24 @@ final class DataPaths
     {
         $parsed = $this->parseDatasetRef($datasetKey);
         $path = sprintf('%s/%s/%s.%s', $this->folioArchiveRootDir, $parsed['provider'], $parsed['code'], ltrim($extension, '.'));
+
+        if ($create) {
+            $this->filesystem()->mkdir(dirname($path));
+        }
+
+        return $path;
+    }
+
+    /**
+     * Path to the bare, uninflated, uncompressed folio snapshot, e.g.
+     * <root>/folio-bare/<provider>/<code>.folio. Sibling of folioFile()/folioArchiveFile():
+     * captured right after row ingest, before indexes/FTS5 are added, so a `.gz` archive can
+     * later be produced by a plain gzip of this file — no stripping indexes/VACUUM needed.
+     */
+    public function folioBareFile(string $datasetKey, string $extension = 'folio', bool $create = false): string
+    {
+        $parsed = $this->parseDatasetRef($datasetKey);
+        $path = sprintf('%s/%s/%s.%s', $this->folioBareRootDir, $parsed['provider'], $parsed['code'], ltrim($extension, '.'));
 
         if ($create) {
             $this->filesystem()->mkdir(dirname($path));
