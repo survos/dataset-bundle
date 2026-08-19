@@ -291,11 +291,70 @@ final class PhraseExtractor
         $this->phrases[$code]['facet'] = $this->phrases[$code]['facet'] || $isFacet;
     }
 
+    /**
+     * The source locale decides the phrases.<locale>.jsonl filename, the `locale` on every phrase,
+     * and the hash each phrase is stored under (HashUtil::calcSourceKey is a pure function of
+     * text + locale). Get it wrong and the whole round trip silently no-ops: Lingua is asked to
+     * translate en→en, returns nothing, and dataset:intl:pull reports "0 translated, N missing"
+     * long after the push claimed success.
+     *
+     * That is not hypothetical — it is exactly what happened to 1,250 musdig datasets. The
+     * registry's DatasetInfo::$locale is empty for that whole provider (agg:musdig:meta writes
+     * locale.default into _meta/dataset.json but never populates the entity), so the old
+     * `?: 'en'` shipped Hungarian text to Lingua labelled English.
+     *
+     * Hence two sources before any fallback, and a warning rather than a shrug when neither
+     * knows. Deliberately NOT throwing: this also runs inside the normalize row listener, and a
+     * hard failure here would take out the whole pipeline for any dataset that legitimately has
+     * no recorded locale. Loud and recoverable beats silent or fatal.
+     */
     private function resolveSourceLocale(string $datasetKey): string
     {
-        $info   = $this->datasets->find($datasetKey);
-        $locale = $info?->locale;
-        return is_string($locale) && $locale !== '' ? $locale : 'en';
+        $locale = $this->datasets->find($datasetKey)?->locale;
+        if (is_string($locale) && $locale !== '') {
+            return $locale;
+        }
+
+        // The provider writes _meta/dataset.json; the registry is only supposed to mirror it.
+        // When they disagree, the file on disk is the one that came from the source.
+        $fromMeta = $this->localeFromMeta($datasetKey);
+        if ($fromMeta !== null) {
+            $this->logger?->warning(
+                'phrase extract [{dataset}]: DatasetInfo.locale is empty; using locale.default "{locale}" '
+                . 'from _meta/dataset.json. The registry is stale for this dataset.',
+                ['dataset' => $datasetKey, 'locale' => $fromMeta],
+            );
+
+            return $fromMeta;
+        }
+
+        $this->logger?->error(
+            'phrase extract [{dataset}]: no source locale in DatasetInfo or _meta/dataset.json — '
+            . 'falling back to "en". If this dataset is not English its phrases will be pushed to '
+            . 'Lingua mislabelled and every translation will come back missing.',
+            ['dataset' => $datasetKey],
+        );
+
+        return 'en';
+    }
+
+    /** locale.default from the dataset's own _meta/dataset.json, or null when unreadable. */
+    private function localeFromMeta(string $datasetKey): ?string
+    {
+        $file = rtrim($this->paths->stageDir($datasetKey, Stage::Meta), '/') . '/dataset.json';
+        if (!is_file($file)) {
+            return null;
+        }
+
+        try {
+            $data = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+
+        $locale = is_array($data) ? ($data['locale']['default'] ?? null) : null;
+
+        return is_string($locale) && $locale !== '' ? $locale : null;
     }
 
     private function defaultOutputPath(string $datasetKey): string
