@@ -109,6 +109,7 @@ final class DataPaths
         public private(set) string $runsRoot = 'runs',
         public private(set) string $cacheRoot = 'cache',
         public private(set) string $zipsRoot = 'vault',
+        public private(set) ?string $captureRoot = null,
         public private(set) string $defaultObjectFilename = 'obj.jsonl',
     ) {
     }
@@ -127,6 +128,28 @@ final class DataPaths
         get => str_starts_with($this->zipsRoot, '/')
             ? rtrim($this->zipsRoot, '/')
             : "{$this->root}/{$this->zipsRoot}";
+    }
+
+    /**
+     * Where provider capture dirs live. Defaults to zipsRootDir, so apps that never set
+     * capture_root see no change at all.
+     *
+     * Split out because capture and raw have opposite access patterns and therefore want
+     * opposite storage. Capture holds write-once/read-once archives — nara's export is a single
+     * 174 GB zip — while raw (_raw/*.jsonl) is small (~1 GB at the very largest) and re-read on
+     * every normalize pass. Pointing raw at a read-caching S3 mount is a clear win; pointing
+     * capture at the same mount would pull that 174 GB file through the cache and evict every
+     * raw file behind it. Two roots, two mounts, one config value.
+     */
+    public string $captureRootDir {
+        get {
+            $root = trim((string) $this->captureRoot);
+            if ('' === $root) {
+                return $this->zipsRootDir;
+            }
+
+            return str_starts_with($root, '/') ? rtrim($root, '/') : "{$this->root}/{$root}";
+        }
     }
 
     public function filesystem(): Filesystem
@@ -179,7 +202,9 @@ final class DataPaths
      */
     public function captureDir(string $providerId, bool $create = false): string
     {
-        $dir = $this->providerArchiveRoot($providerId) . '/_capture';
+        // captureRootDir, NOT providerArchiveRoot — capture may live on different storage than
+        // the rest of the vault (see $captureRootDir). Identical result when capture_root is unset.
+        $dir = $this->captureRootDir . '/' . $this->sanitizeToken($providerId) . '/_capture';
         if ($create) {
             $this->filesystem()->mkdir($dir);
         }

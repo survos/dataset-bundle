@@ -66,6 +66,9 @@ final class SurvosDatasetBundle extends AbstractBundle
                 ->scalarNode('runs_root')->defaultValue('runs')->end()
                 ->scalarNode('cache_root')->defaultValue('cache')->end()
                 ->scalarNode('zips_root')->defaultValue('vault')->end()
+                ->scalarNode('capture_root')->defaultNull()
+                    ->info('Root for provider capture dirs (vault/<provider>/_capture) when they must live somewhere other than zips_root. Null/empty = same as zips_root. Absolute paths are used as-is, relative ones resolve under data_dir. Exists because capture and raw have opposite access patterns: capture holds write-once/read-once archives (nara ships a single 174 GB zip) while raw is re-read on every normalize, so a cached S3 mount that is right for raw is actively wrong for capture.')
+                ->end()
                 ->scalarNode('default_object_filename')->defaultValue('obj.jsonl')->end()
                 ->integerNode('normalized_row_limit')->defaultValue(0)
                     ->info('Cap records per core when the workflow normalizes (raw→normalized). 0 = all. Bind to an env var (e.g. DATASET_NORMALIZED_ROW_LIMIT) to throttle for smoke tests in .env.local.')
@@ -111,6 +114,7 @@ final class SurvosDatasetBundle extends AbstractBundle
                 '$runsRoot' => $config['runs_root'],
                 '$cacheRoot' => $config['cache_root'],
                 '$zipsRoot' => $config['zips_root'],
+                '$captureRoot' => $config['capture_root'],
                 '$defaultObjectFilename' => $config['default_object_filename'],
             ]);
 
