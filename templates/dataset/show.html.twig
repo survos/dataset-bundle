@@ -37,6 +37,29 @@
 
 <div class="page-body">
   <div class="container-xl">
+
+    {# Workflow state + transitions for this dataset.
+
+       DatasetInfo carries a marking (MarkingTrait) but the WORKFLOW that gives those
+       places meaning is defined per-app -- today only harvest has one, deliberately, as
+       part of consolidating dataset processing there. The component renders nothing when
+       no workflow in the app supports the subject, so this is inert everywhere else and
+       lights up wherever a DatasetWorkflow is registered.
+
+       workflowCode is the one prop that has to be right; globalKey is derived from the
+       entity class. Landing back on this page rather than a per-state screen: a dataset
+       has one screen, and most of its transitions are queued, so what you want is to
+       watch the ▶ move rather than be sent somewhere. #}
+    <div class="mb-3">
+      <twig:state:workflow-marking
+        :subject="dataset"
+        workflowCode="DatasetWorkflow"
+        layout="inline"
+        :showSteps="true"
+        :redirectUrl="app.request.uri"
+      />
+    </div>
+
     <div class="row g-3">
       <div class="col-lg-8">
         <div class="card">
