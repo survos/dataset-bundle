@@ -90,11 +90,26 @@ final class DatasetReset
     }
 
     /**
-     * Reset the dataset_info row to its workflow's initial place, with no docs and no pending steps.
-     * The initial place is read from the registered workflow (so we don't hard-code an app-defined
-     * place name); null when the dataset isn't registered or no workflow applies.
+     * REMOVE the dataset_info row, rather than rewinding its marking in place.
      *
-     * @param-out bool $found whether a dataset_info row was updated
+     * Rewinding looked equivalent and was not: the workflow is started by
+     * InitialPlaceKickoffListener, which fires on postPersist. Setting marking back to the initial
+     * place is an UPDATE, so nothing was ever dispatched — a reset dataset sat at `new` with an
+     * empty queue and no error, and the only way forward was to kick it by hand with
+     * `state:iterate -m new -t raw`. That is the old manual kickstart, not part of the workflow.
+     *
+     * Deleting makes the next `dataset:scan` persist a genuinely new entity, so the ordinary
+     * kickoff runs and the chain starts on its own. No second kickoff implementation lives here —
+     * which is the whole point: InitialPlaceKickoffListener exists precisely because apps kept
+     * hand-rolling that dispatch and getting it subtly wrong.
+     *
+     * Safe to delete because the row is derived, not authored: dataset:scan rebuilds it from
+     * _meta/dataset.json plus a disk scan, and rediscovers artifacts from the folio files
+     * themselves. Cascade removes this dataset's Artifact rows with it (orphanRemoval), which the
+     * same scan repopulates. The primary key is the natural datasetKey, not an autoincrement id,
+     * so identity survives the round trip and nothing can be left pointing at a stale id.
+     *
+     * @param-out bool $found whether a dataset_info row was removed
      */
     private function resetDbState(string $datasetKey, bool &$found): ?string
     {
@@ -108,10 +123,11 @@ final class DatasetReset
             return null;
         }
 
+        // Read the initial place before removing, purely so the caller can report what the row
+        // will come back as; nothing here writes it.
         $marking = $this->initialMarking($info);
-        $info->marking = $marking;
-        $info->pendingSteps = [];
-        $info->meiliDocCount = null;
+
+        $em->remove($info);
         $em->flush();
 
         $found = true;

@@ -68,7 +68,19 @@ final class DatasetStageCommands
         private readonly ?ClaimsVaultWriter $claimsWriter = null,
     ) {}
 
-    #[AsCommand('dataset:normalize', 'Normalize a dataset, code, or provider (→ norm/)', aliases: ['dataset:norm'])]
+    /**
+     * LEGACY / DEBUG ENTRY POINT — one normalization step, by hand, synchronously.
+     *
+     * Normalization is a workflow transition (DatasetFlow::onNormalize). Registering a DatasetInfo
+     * starts the chain and a consumer does this work; that is the supported path. Two divergences
+     * make hand-running bite: this command ignores survos_dataset.normalized_row_limit while the
+     * transition applies it (same file, different row counts, last writer wins), and it skips the
+     * media gate, so a folio can be built from rows whose images are not yet in S3.
+     *
+     * Keep it for inspecting one stage while designing a field map. Not for loading a dataset.
+     * Full rationale: harvest docs/deprecated.md.
+     */
+    #[AsCommand('dataset:normalize', '[legacy/debug] Normalize one dataset synchronously (→ norm/). Real runs consume the dataset.normalize queue — see the docblock.', aliases: ['dataset:norm'])]
     public function normalize(
         SymfonyStyle $io,
         #[MapInput] DatasetInputDTO $input,
