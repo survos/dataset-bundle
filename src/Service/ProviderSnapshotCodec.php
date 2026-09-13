@@ -31,6 +31,19 @@ final class ProviderSnapshotCodec
                 'defaultLocale',
                 'dataReuse',
                 'termsUrl',
+                'adapterClass',
+                'entityProviderClass',
+                'primaryItem',
+                'authorities',
+                'durableRaw',
+                'compressedRaw',
+                'descriptionIsContentFallback',
+                'metaCreation',
+                'rawAcquisition',
+                'capturePath',
+                'vaultCommand',
+                'vaultNotes',
+                'providerCommands',
             ],
         ]);
 
@@ -59,6 +72,18 @@ final class ProviderSnapshotCodec
             'dataReuse' => $snapshot->dataReuse,
             'termsUrl' => $snapshot->termsUrl,
             'entityProviderClass' => $snapshot->entityProviderClass,
+            'adapterClass' => $snapshot->adapterClass,
+            'primaryItem' => $snapshot->primaryItem,
+            'authorities' => $snapshot->authorities,
+            'durableRaw' => $snapshot->durableRaw,
+            'compressedRaw' => $snapshot->compressedRaw,
+            'descriptionIsContentFallback' => $snapshot->descriptionIsContentFallback,
+            'metaCreation' => $snapshot->metaCreation,
+            'rawAcquisition' => $snapshot->rawAcquisition,
+            'capturePath' => $snapshot->capturePath,
+            'vaultCommand' => $snapshot->vaultCommand,
+            'vaultNotes' => $snapshot->vaultNotes,
+            'providerCommands' => $snapshot->providerCommands,
         ];
     }
 
@@ -115,7 +140,11 @@ final class ProviderSnapshotCodec
 
         $this->serializer->denormalize($payload, Provider::class, null, [
             AbstractNormalizer::OBJECT_TO_POPULATE => $provider,
-            AbstractNormalizer::IGNORED_ATTRIBUTES => ['code', 'datasets', 'syncedAt', 'datasetCount'],
+            AbstractNormalizer::IGNORED_ATTRIBUTES => [
+                'code', 'datasets', 'syncedAt', 'datasetCount',
+                // Owned by dataset:scan, not by the provider.json snapshot.
+                'candidateCount', 'datasetStatusCounts', 'lastScanAt',
+            ],
         ]);
 
         return $provider;

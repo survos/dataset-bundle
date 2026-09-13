@@ -53,6 +53,50 @@ final class DatasetRegistryUpdater
         return $info;
     }
 
+    /**
+     * Create or refresh a dataset from its `_meta/dataset.json` — the single-dataset equivalent of
+     * dataset:scan's meta pass.
+     *
+     * Unlike {@see ensureFromMetaIfExists()}, which returns an existing row untouched, this always
+     * re-reads the meta. That is the point: a provider re-running its acquisition has new counts,
+     * a new label and possibly a new raw path, and the row should reflect them without a full scan.
+     *
+     * The workflow marking is deliberately not touched — `populateFromMeta()` never writes it, so a
+     * dataset parked in `cataloged` stays parked and one mid-pipeline is not rewound. Promotion out
+     * of `cataloged` is the adopt transition's job, and it has a vault guard this does not.
+     */
+    public function syncFromMeta(string $datasetKey): ?DatasetInfo
+    {
+        $datasetKey = $this->canonicalDatasetKey($datasetKey);
+
+        $paths = new DatasetPaths($this->dataPaths, $datasetKey);
+        if (!is_file($paths->metaJson)) {
+            return null;
+        }
+
+        $meta = $this->loadMeta($paths->metaJson);
+
+        $info = $this->datasetRepository->find($datasetKey);
+        $isNew = !$info instanceof DatasetInfo;
+        if ($isNew) {
+            $info = new DatasetInfo($datasetKey);
+            $this->entityManager->persist($info);
+        }
+
+        $this->populateFromMeta($info, $meta, $paths->metaJson);
+        $provider = $this->attachProvider($info);
+        $this->updateStatus($info);
+        $this->entityManager->flush();
+
+        if ($isNew) {
+            // Only a new row changes the provider's dataset count; a refresh does not.
+            $this->refreshProviderCount($provider);
+            $this->entityManager->flush();
+        }
+
+        return $info;
+    }
+
     public function updateNormalized(
         string $datasetKey,
         string $jsonlPath,

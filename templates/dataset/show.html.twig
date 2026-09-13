@@ -5,8 +5,7 @@
 {% block body %}
 {% set sourceUrl = dataset.sourceUrl %}
 {% set folioArtifact = dataset.artifact(constant('Survos\\DatasetBundle\\Entity\\Artifact::TYPE_FOLIO')) %}
-{% set folioBase = folio_server|default('')|trim('/') %}
-{% set folioUrl = folioArtifact and folioBase ? folioBase ~ '/folio/' ~ dataset.provider ~ '/' ~ dataset.code : null %}
+{% set folioUrl = folioArtifact ? folio_browse_url(dataset.datasetKey) : null %}
 <div class="page-header d-print-none">
   <div class="container-xl">
     <div class="row align-items-center">
@@ -24,6 +23,8 @@
         {% if sourceUrl %}
           <a class="btn btn-sm btn-outline-secondary" href="{{ sourceUrl }}" target="_blank" rel="noopener">Source</a>
         {% endif %}
+        {% set readerUrl = folio_reader_url(dataset.datasetKey) %}
+        {% if readerUrl %}<a class="btn btn-sm btn-primary" href="{{ readerUrl }}">Read in Ink</a>{% endif %}
         {% if folioUrl %}
           <a class="btn btn-sm btn-outline-primary" href="{{ folioUrl }}" target="_blank" rel="noopener">ZM Folio</a>
         {% endif %}

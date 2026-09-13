@@ -5,6 +5,8 @@ namespace Survos\DatasetBundle\Meta;
 
 use Survos\DatasetBundle\Configuration\DatasetConfiguration;
 use Survos\DatasetBundle\Service\DatasetPaths;
+use Survos\DatasetBundle\Event\DatasetMetaWrittenEvent;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Yaml\Yaml;
 
@@ -20,6 +22,9 @@ final class DatasetMetadataEnsurer
     public function __construct(
         private readonly DatasetMetadataConfiguration $configuration = new DatasetMetadataConfiguration(),
         private readonly Processor $processor = new Processor(),
+        // Optional so the ensurer stays newable in tests and in apps without a dispatcher; when it
+        // is present, writing dataset.json announces the dataset instead of waiting for a scan.
+        private readonly ?EventDispatcherInterface $eventDispatcher = null,
     ) {
     }
 
@@ -88,6 +93,13 @@ final class DatasetMetadataEnsurer
 
             $paths->paths->filesystem()->mkdir($paths->metaDir);
             file_put_contents($metaJsonFile, $encoded);
+
+            // Only on an actual write: callers that pass write:false are computing a config, not
+            // declaring a dataset. Every provider's meta step funnels through here, so this is the
+            // one place that makes dataset:scan unnecessary for all of them rather than per-provider.
+            $this->eventDispatcher?->dispatch(
+                new DatasetMetaWrittenEvent($paths->datasetKey, $metaJsonFile)
+            );
         }
 
         return $config;

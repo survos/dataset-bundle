@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle;
 
-use Survos\DatasetBundle\Event\DatasetArtifactUpdatedEvent;
 use Survos\DatasetBundle\EventListener\SubjectImportListener;
 use Survos\DatasetBundle\Service\DatasetIntlService;
 use Survos\DatasetBundle\Service\PhraseExtractor;
@@ -12,12 +11,12 @@ use Survos\DatasetBundle\Context\DatasetResolver;
 use Survos\DatasetBundle\Doctrine\SqliteWalMiddleware;
 use Survos\DatasetBundle\EventListener\DatasetContextConsoleListener;
 use Survos\DatasetBundle\EventListener\DatasetRegistryArtifactListener;
+use Survos\DatasetBundle\EventListener\DatasetRegistryMetaListener;
 use Survos\DatasetBundle\EventListener\DatasetRegistryImportConvertListener;
 use Survos\DatasetBundle\Meta\DatasetMetadataConfiguration;
 use Survos\DatasetBundle\Meta\DatasetMetadataEnsurer;
 use Survos\DatasetBundle\Meta\DatasetMetadataLoader;
 use Survos\DatasetBundle\Repository\ArtifactRepository;
-use Survos\DatasetBundle\Repository\CandidateRepository;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\DatasetBundle\Repository\ProviderRepository;
 use Survos\DatasetBundle\Menu\DataMenuSubscriber;
@@ -200,11 +199,20 @@ final class SurvosDatasetBundle extends AbstractBundle
                 ->public();
         }
 
+        // No explicit kernel.event_listener tag on either of these: autoconfigure() already reads
+        // their #[AsEventListener] attribute, and adding the tag as well registered them TWICE —
+        // DatasetRegistryArtifactListener has been running the registry updater twice per artifact.
         $services->set(DatasetRegistryArtifactListener::class)
             ->autowire()
             ->autoconfigure()
-            ->public()
-            ->tag('kernel.event_listener', ['event' => DatasetArtifactUpdatedEvent::class]);
+            ->public();
+
+        // Makes `dataset:scan` unnecessary after an acquisition command: every provider's meta step
+        // goes through DatasetMetadataEnsurer::ensureJson(), which announces the dataset here.
+        $services->set(DatasetRegistryMetaListener::class)
+            ->autowire()
+            ->autoconfigure()
+            ->public();
 
         // Scopes Artifact's /folio-archives collection to type=folio_archive -- see the class
         // docblock. autoconfigure() picks up API Platform's own registerForAutoconfiguration()
@@ -248,12 +256,6 @@ final class SurvosDatasetBundle extends AbstractBundle
             ->tag('doctrine.repository_service');
 
         $services->set(ArtifactRepository::class)
-            ->autowire()
-            ->autoconfigure()
-            ->public()
-            ->tag('doctrine.repository_service');
-
-        $services->set(CandidateRepository::class)
             ->autowire()
             ->autoconfigure()
             ->public()

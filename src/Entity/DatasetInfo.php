@@ -38,24 +38,34 @@ use Symfony\Component\Serializer\Attribute\Groups;
 #[ORM\Index(columns: ['status'])]
 #[ApiResource(
     operations: [
-        new GetCollection(uriTemplate: '/dataset_infos', normalizationContext: ['groups' => ['dataset:read']]),
+        new GetCollection(uriTemplate: '/dataset_infos', normalizationContext: ['groups' => ['dataset:read', 'marking']]),
         // datasetKey contains a slash (e.g. "nara/rg_105"); without the `.+` requirement
         // Symfony can neither match nor GENERATE the IRI, breaking serialization/browsing.
         new Get(
             uriTemplate: '/dataset_infos/{datasetKey}',
             requirements: ['datasetKey' => '.+'],
-            normalizationContext: ['groups' => ['dataset:read']],
+            normalizationContext: ['groups' => ['dataset:read', 'marking']],
         ),
     ],
-    normalizationContext: ['groups' => ['dataset:read']],
+    normalizationContext: ['groups' => ['dataset:read', 'marking']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['datasetKey' => 'partial', 'label' => 'partial', 'aggregator' => 'exact', 'status' => 'exact', 'country' => 'exact'])]
-#[ApiFilter(OrderFilter::class, properties: ['datasetKey', 'label', 'aggregator', 'status', 'objCount', 'normalizedCount', 'lastScanned'])]
+#[ApiFilter(SearchFilter::class, properties: ['datasetKey' => 'partial', 'label' => 'partial', 'aggregator' => 'exact', 'marking' => 'exact', 'status' => 'exact', 'country' => 'exact'])]
+#[ApiFilter(OrderFilter::class, properties: ['datasetKey', 'label', 'aggregator', 'marking', 'status', 'objCount', 'normalizedCount', 'lastScanned'])]
 final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \Stringable
 {
     use RouteIdentityTrait;
     // Workflow lifecycle place (meta → raw → normalize → enrich → folio) — see app IDatasetWorkflow.
     use MarkingTrait;
+
+    // The marking is serialized via MarkingTrait::$marking, which carries its own 'marking'
+    // serializer group — that group is in this resource's normalizationContext because the
+    // marking is now how a catalog entry is told apart from a harvested one (`cataloged` vs the
+    // rest), and api_grid reads its columns from the API payload.
+    #[Field(transKey: 'workflowStage', sortable: true, filterable: true, facet: true, order: 45)]
+    public function getMarking(): ?string
+    {
+        return $this->marking;
+    }
 
     /**
      * Keyed by phase (transition name): ['observe' => ['task_a'], 'analyze' => ['task_b']].
@@ -75,7 +85,7 @@ final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
-    #[Field(searchable: true, sortable: true, order: 20)]
+    #[Field(transKey: 'title', searchable: true, sortable: true, order: 20)]
     public ?string $label = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
@@ -85,7 +95,7 @@ final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
-    #[Field(searchable: true, sortable: true, filterable: true, facet: true, order: 40)]
+    #[Field(transKey: 'provider', searchable: true, sortable: true, filterable: true, facet: true, order: 0)]
     public ?string $aggregator = null;    // dc | pp | fortepan | mds | mus | etc.
 
     #[ORM\ManyToOne(targetEntity: Provider::class, inversedBy: 'datasets')]
@@ -99,7 +109,7 @@ final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \
 
     #[ORM\Column(nullable: true)]
     #[Groups(['dataset:read'])]
-    #[Field(searchable: true, sortable: true, filterable: true, facet: true, order: 50)]
+    #[Field(transKey: 'language', searchable: true, sortable: true, filterable: true, facet: true, order: 50)]
     public ?string $locale = null;        // default locale: en | de | hu | etc.
 
     /** From _meta/dataset.json's locale.targets — which locales dataset:intl:push/pull and
@@ -136,7 +146,7 @@ final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \
 
     #[ORM\Column]
     #[Groups(['dataset:read'])]
-    #[Field(sortable: true, filterable: true, widget: Widget::Range, order: 70)]
+    #[Field(transKey: 'sourceRecords', sortable: true, filterable: true, widget: Widget::Range, order: 70)]
     public int $objCount = 0;             // from extras.obj_count or profile recordCount
 
     // ── Paths (resolved at scan time, no filesystem access needed later) ──────

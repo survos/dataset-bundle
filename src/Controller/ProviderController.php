@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Controller;
 
-use Survos\DatasetBundle\Entity\Candidate;
 use Survos\DatasetBundle\Entity\DatasetInfo;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\DatasetBundle\Repository\ProviderRepository;
@@ -44,20 +43,24 @@ final class ProviderController extends AbstractController
             throw $this->createNotFoundException('Missing provider code.');
         }
 
-        if (!$this->isConfiguredProvider($providerCode)) {
-            throw $this->createNotFoundException(sprintf('Provider is not enabled in this application: %s', $providerCode));
-        }
-
+        // The row's existence is the gate, not `survos_dataset.providers`. That allowlist says
+        // which directories dataset:scan walks; using it here 404'd the detail page for every
+        // provider that had an adapter but was missing from the YAML — including the ones whose
+        // "Provider Page" links the homepage was already rendering.
         $providerEntity = $this->providerRepository->find($providerCode);
         if (!$providerEntity) {
             throw $this->createNotFoundException(sprintf('Provider not found: %s', $providerCode));
         }
 
+        $configured = array_values(array_filter(array_unique(array_map(
+            static fn(mixed $code): string => strtolower(trim((string) $code)),
+            $this->enabledProviders
+        ))));
+
         return $this->render('@SurvosDatasetBundle/provider/show.html.twig', [
             'provider' => $providerEntity,
-            'candidateApiUrl' => '/api/candidates',
+            'configured' => $configured === [] || in_array(strtolower($providerCode), $configured, true),
             'datasetApiUrl' => '/api/dataset_infos?aggregator=' . rawurlencode($providerCode),
-            'candidateClass' => Candidate::class,
             'datasetClass' => DatasetInfo::class,
         ]);
     }
@@ -66,10 +69,6 @@ final class ProviderController extends AbstractController
     public function dataset(string $provider, string $code): Response
     {
         $providerCode = strtolower(trim($provider));
-        if (!$this->isConfiguredProvider($providerCode)) {
-            throw $this->createNotFoundException(sprintf('Provider is not enabled in this application: %s', $providerCode));
-        }
-
         $datasetKey = $providerCode . '/' . trim($code);
         $dataset = $this->datasetInfoRepository->find($datasetKey);
         if (!$dataset) {
@@ -81,15 +80,5 @@ final class ProviderController extends AbstractController
             'provider' => $dataset->providerEntity,
             'stages' => $this->stageInventory->forDatasetKey($datasetKey),
         ]);
-    }
-
-    private function isConfiguredProvider(string $providerCode): bool
-    {
-        $enabledProviders = array_values(array_filter(array_unique(array_map(
-            static fn(mixed $code): string => strtolower(trim((string) $code)),
-            $this->enabledProviders
-        ))));
-
-        return $enabledProviders === [] || in_array(strtolower($providerCode), $enabledProviders, true);
     }
 }

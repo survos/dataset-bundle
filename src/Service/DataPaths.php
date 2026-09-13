@@ -288,6 +288,43 @@ final class DataPaths
         return $vaultDir;
     }
 
+    /**
+     * Where this dataset's raw cores actually are, or null if it has none yet.
+     *
+     * Deliberately side-effect free, unlike {@see ensureRawPortal()} which mkdirs the vault dir on
+     * the way past. A workflow guard runs this once per row — over a catalog of thousands of
+     * newspaper titles that have never been acquired, "ensure" would carve out an empty vault
+     * directory for every one of them and make the vault look populated when it is not.
+     *
+     * @return array{dir: string, cores: list<string>}|null
+     */
+    public function existingRawCores(string $datasetKey): ?array
+    {
+        $vaultDir = $this->vaultDatasetDir($datasetKey) . '/' . Stage::Raw->dir();
+        $workDir  = $this->datasetDir($datasetKey) . '/' . Stage::Raw->dir();
+
+        // Vault first: it is the durable home. The work dir only still matters for legacy
+        // datasets whose raw was written before the vault existed.
+        foreach ([$vaultDir, $workDir] as $dir) {
+            if (!is_dir($dir)) {
+                continue;
+            }
+
+            $cores = [];
+            foreach (['*.jsonl', '*.jsonl.gz'] as $pattern) {
+                $cores = [...$cores, ...(glob("{$dir}/{$pattern}") ?: [])];
+            }
+
+            if ($cores !== []) {
+                sort($cores);
+
+                return ['dir' => $dir, 'cores' => $cores];
+            }
+        }
+
+        return null;
+    }
+
     private function isDirEmpty(string $dir): bool
     {
         foreach (new \FilesystemIterator($dir) as $_) {

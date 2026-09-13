@@ -406,12 +406,45 @@ final class ScanDatasetsCommand extends DataCommand
         }
         $this->em->flush();
 
-        // ── Phase 4: refresh provider dataset counts (cached on Provider) ─────
+        // ── Phase 3b: re-attach orphaned provider links ───────────────────────
+        // DatasetInfo.provider_code is ON DELETE SET NULL, and SQLite implements most schema
+        // changes by rebuilding the table — so any doctrine:schema:update touching `provider`
+        // silently nulls the link on every dataset row. The provider code is still in
+        // DatasetInfo.aggregator, so this is recoverable, and scanning is the right place to do it:
+        // without it a provider's dataset_count reads as only the datasets scan happened to visit.
+        $relinked = $this->em->createQuery(
+            'UPDATE ' . DatasetInfo::class . ' d SET d.providerEntity = d.aggregator'
+            . ' WHERE d.providerEntity IS NULL AND d.aggregator IS NOT NULL'
+            . ' AND d.aggregator IN (SELECT p.code FROM ' . Provider::class . ' p)'
+        )->execute();
+
+        if ($relinked > 0) {
+            $io->note(sprintf('Re-attached %d dataset(s) to their provider.', $relinked));
+
+            // A bulk UPDATE bypasses the identity map, so everything already loaded is stale —
+            // including the Provider objects Phase 4 counts against, which would otherwise report
+            // the pre-relink numbers and need a second run to settle.
+            $this->em->clear();
+            foreach (array_keys($providersByCode) as $providerCode) {
+                $providersByCode[$providerCode] = $this->providerRepo->findOneByCode($providerCode);
+            }
+            $providersByCode = array_filter($providersByCode);
+        }
+
+        // ── Phase 4: refresh the counters cached on Provider ──────────────────
+        // syncedAt stays owned by agg:sync (when the adapter attributes were last read); this
+        // records when the data directory was last walked, which is a different question and the
+        // one you ask when a provider's counts look wrong.
+        $statusCounts = $this->datasetRepository->countByProviderAndStatus();
+        $candidateCounts = $this->datasetRepository->countByProviderAndMarking()['new'] ?? [];
+
         $providerCountRows = [];
         foreach ($providersByCode as $providerCode => $providerEntity) {
             $datasetCount = $repo->count(['providerEntity' => $providerEntity]);
             $providerEntity->setDatasetCount($datasetCount);
-            $providerEntity->setSyncedAt(new \DateTime());
+            $providerEntity->setDatasetStatusCounts($statusCounts[$providerCode] ?? []);
+            $providerEntity->setCandidateCount($candidateCounts[$providerCode] ?? 0);
+            $providerEntity->setLastScanAt(new \DateTime());
 
             $providerCountRows[] = [$providerCode, (string) $datasetCount];
         }

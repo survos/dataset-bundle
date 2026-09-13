@@ -16,8 +16,17 @@
         {% if provider.homepage %}
           <a class="btn btn-outline-secondary btn-sm" href="{{ provider.homepage }}" target="_blank" rel="noopener">Website</a>
         {% endif %}
+        {% if provider.termsUrl %}
+          <a class="btn btn-outline-secondary btn-sm" href="{{ provider.termsUrl }}" target="_blank" rel="noopener">Terms</a>
+        {% endif %}
         {% if route_exists('meili_insta') %}
           <a class="btn btn-outline-primary btn-sm" href="{{ path('meili_insta', {indexName: 'md_' ~ provider.code}) }}" target="_blank">Search</a>
+        {% endif %}
+        {% if route_exists('app_provider_sync') and provider.adapterClass %}
+          <form method="post" action="{{ path('app_provider_sync', {provider: provider.code}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('provider-sync') }}">
+            <button type="submit" class="btn btn-outline-primary btn-sm">Sync to DB</button>
+          </form>
         {% endif %}
       </div>
     </div>
@@ -35,32 +44,91 @@
                 {% if provider.description %}
                   <p class="mb-2 text-muted">{{ provider.description }}</p>
                 {% endif %}
+                <div class="d-flex gap-2 flex-wrap">
+                  {% set stage_color = {'active': 'green', 'idle': 'yellow', 'orphan': 'red'} %}
+                  <span class="badge bg-{{ stage_color[provider.stage] ?? 'secondary' }}-lt">{{ provider.stage }}</span>
+                  {% if not configured %}
+                    <span class="badge bg-orange-lt" title="Not listed in survos_dataset.providers, so dataset:scan skips this provider directory.">not scanned</span>
+                  {% endif %}
+                  <span class="badge bg-primary-lt">{{ provider.datasetCount ?? 0 }} datasets</span>
+                  {% if provider.candidateCount %}<span class="badge bg-azure-lt" title="Known upstream, nothing acquired">{{ provider.candidateCount|number_format }} candidates</span>{% endif %}
+                  {% if provider.defaultLocale %}<span class="badge bg-secondary-lt">{{ provider.defaultLocale }}</span>{% endif %}
+                  {% if provider.dataReuse %}<span class="badge bg-secondary-lt">{{ provider.dataReuse }}</span>{% endif %}
+                </div>
+              </div>
+              {#
+                How this provider is administered. Lives in the app's #[Aggregator] attribute and is
+                copied here by agg:sync, so the answers do not require reading PHP source.
+              #}
+              <div class="col-md-4">
+                <dl class="row small mb-0">
+                  {% if provider.adapterShortName %}
+                    <dt class="col-5 fw-normal text-muted">Adapter</dt>
+                    <dd class="col-7"><code title="{{ provider.adapterClass }}">{{ provider.adapterShortName }}</code></dd>
+                  {% endif %}
+                  {% if provider.entityProviderShortName %}
+                    <dt class="col-5 fw-normal text-muted">Entity</dt>
+                    <dd class="col-7"><code>{{ provider.entityProviderShortName }}</code></dd>
+                  {% endif %}
+                  {% if provider.primaryItem %}
+                    <dt class="col-5 fw-normal text-muted">Primary</dt>
+                    <dd class="col-7"><code>{{ provider.primaryItem }}</code></dd>
+                  {% endif %}
+                  <dt class="col-5 fw-normal text-muted">Raw</dt>
+                  <dd class="col-7">{{ provider.durableRaw ? 'durable (vault)' : 'disposable' }}{{ provider.compressedRaw ? ', gz' : '' }}</dd>
+                  {% if provider.capturePath %}
+                    <dt class="col-5 fw-normal text-muted">Capture</dt>
+                    <dd class="col-7"><code>{{ provider.capturePath }}</code></dd>
+                  {% endif %}
+                  {% if provider.syncedAt %}
+                    <dt class="col-5 fw-normal text-muted">Synced</dt>
+                    <dd class="col-7">{{ provider.syncedAt|date('Y-m-d H:i') }}</dd>
+                  {% endif %}
+                  {% if provider.lastScanAt %}
+                    <dt class="col-5 fw-normal text-muted">Scanned</dt>
+                    <dd class="col-7">{{ provider.lastScanAt|date('Y-m-d H:i') }}</dd>
+                  {% endif %}
+                </dl>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-12">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title mb-0">Candidates</h3>
-          </div>
-          <div class="card-body">
-            <twig:api_grid
-              facets="false"
-              :class="candidateClass"
-              :apiGetCollectionUrl="candidateApiUrl"
-              :filter="{ 'providerCode[]': provider.code }"
-              :columns="[
-                {name: 'candidateKey'},
-                {name: 'sourceId'},
-                {name: 'kind'},
-                {name: 'label'},
-                {name: 'status'},
-                {name: 'datasetKey'},
-                {name: 'updatedAt'}
-              ]"
-            />
+            {#
+              The provider's runbook. Loading the vault is the step that needs instructions:
+              normalize and index are uniform, vault loading is not.
+            #}
+            <hr>
+            <h4 class="fw-bolder">Load vault</h4>
+            {% if provider.vaultCommand %}
+              <pre class="mb-1"><code>bin/console {{ provider.vaultCommand }}</code></pre>
+            {% else %}
+              <p class="mb-1"><span class="badge bg-red-lt">no vault command</span>
+                <span class="small text-muted">Nothing matches <code>&lt;ns&gt;:{{ provider.code }}:vault</code>. If this provider's vault step lives on a singleton or under another name, set <code>vaultCommand</code> on its <code>#[Aggregator]</code> attribute.</span>
+              </p>
+            {% endif %}
+            {% if provider.vaultNotes %}
+              <p class="small text-muted">{{ provider.vaultNotes }}</p>
+            {% endif %}
+
+            {% if provider.providerCommands %}
+              <h4 class="fw-bolder mt-3">All {{ provider.code }} commands</h4>
+              <div class="table-responsive">
+                <table class="table table-sm">
+                  <tbody>
+                    {% for command in provider.providerCommands %}
+                      <tr>
+                        <td style="width: 1%;"><code class="text-nowrap">{{ command.name }}</code></td>
+                        <td class="text-muted small">{{ command.description }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+
+            {% if provider.rawAcquisition or provider.metaCreation %}
+              <hr>
+              {% if provider.rawAcquisition %}<p class="small text-muted mb-1"><strong>Raw acquisition:</strong> {{ provider.rawAcquisition }}</p>{% endif %}
+              {% if provider.metaCreation %}<p class="small text-muted mb-0"><strong>Meta creation:</strong> {{ provider.metaCreation }}</p>{% endif %}
+            {% endif %}
           </div>
         </div>
       </div>
@@ -77,6 +145,7 @@
               :columns="[
                 {name: 'datasetKey'},
                 {name: 'label'},
+                {name: 'marking'},
                 {name: 'status'},
                 {name: 'objCount'},
                 {name: 'normalizedCount'},

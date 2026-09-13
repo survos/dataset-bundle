@@ -28,6 +28,24 @@ class ProviderRepository extends ServiceEntityRepository
     }
 
     /**
+     * Every provider row, datasets eager-loaded, for the admin listings. Deliberately ignores the
+     * `survos_dataset.providers` allowlist: that list says what dataset:scan should walk, and
+     * filtering the UI by it is what made orphaned and never-scanned providers invisible.
+     *
+     * @return list<Provider>
+     */
+    public function findAllForAdmin(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->addSelect('d')
+            ->leftJoin('p.datasets', 'd')
+            ->orderBy('p.label', 'ASC')
+            ->addOrderBy('p.code', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * @param list<string> $providerCodes
      * @return list<Provider>
      */

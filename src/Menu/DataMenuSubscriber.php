@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Menu;
 
-use Survos\DatasetBundle\Entity\Candidate;
 use Survos\DatasetBundle\Entity\Artifact;
 use Survos\DatasetBundle\Entity\DatasetInfo;
 use Survos\DatasetBundle\Entity\Provider;
@@ -26,7 +25,6 @@ class DataMenuSubscriber extends AbstractAdminMenuSubscriber
             'Providers'   => Provider::class,
             'Datasets'    => DatasetInfo::class,
             'Artifacts'   => Artifact::class,
-            'Candidates'  => Candidate::class,
         ];
     }
 

@@ -1,67 +1,210 @@
-<div class="providers-grid" {{ attributes }}>
-    <div class="row g-3">
-        {% for provider in providers %}
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-header d-flex align-items-center gap-2">
-                        <h4 class="card-title" style="min-width: 0;">
-                            <div class="fw-bolder text-truncate">{{ provider.label }}</div>
-                        </h4>
-                        <code class="px-2 small rounded-pill bg-dark-lt">{{ provider.code }}</code>
-                        {% if provider.homepage %}
-                            <a href="{{ provider.homepage }}" target="_blank" rel="noopener" class="ms-auto" title="Homepage">
-                                {{ ux_icon('tabler:external-link') }}
+{#
+  One card per provider — the merged view. There used to be two lists on the harvest homepage,
+  "Source Platforms" (read from the app's in-memory #[Aggregator] registry) and "Dataset Registry"
+  (read from this table), which were the same providers at two stages of one pipeline and drifted
+  apart. This renders the single list, grouped by stage so an adapter that has never harvested
+  anything, and a row whose adapter is gone, are both visible instead of missing.
+#}
+{% set stage_meta = {
+    'active': {label: 'Active', hint: 'Adapter registered, datasets discovered.', color: 'green'},
+    'idle':   {label: 'Registered, no datasets', hint: 'Adapter exists but nothing has been harvested yet — run agg:sync, then dataset:scan.', color: 'yellow'},
+    'orphan': {label: 'Orphaned', hint: 'A provider row with no adapter class. Left behind by a removed or renamed provider; safe to prune.', color: 'red'},
+} %}
+
+{% import _self as cards %}
+
+{% macro provider_card(provider, stage_meta) %}
+    {% set stage = stage_meta[provider.stage] ?? {label: provider.stage, hint: '', color: 'secondary'} %}
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center gap-2">
+                {% if provider.logo %}
+                    <div class="rounded bg-body-tertiary border p-1 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 34px; height: 34px;">
+                        <img src="{{ provider.logo }}" alt="" style="max-width: 100%; max-height: 100%;">
+                    </div>
+                {% endif %}
+                <h4 class="card-title" style="min-width: 0;">
+                    <div class="fw-bolder text-truncate">{{ provider.label ?: provider.code }}</div>
+                </h4>
+                <code class="px-2 small rounded-pill bg-dark-lt">{{ provider.code }}</code>
+                {% if provider.homepage %}
+                    <a href="{{ provider.homepage }}" target="_blank" rel="noopener" class="ms-auto" title="Homepage">
+                        {{ ux_icon('tabler:external-link') }}
+                    </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if provider.description %}
+                    <p class="card-text text-muted small">{{ provider.description|u.truncate(180, '…') }}</p>
+                {% endif %}
+
+                <div class="d-flex gap-2 flex-wrap mb-2">
+                    <span class="badge bg-{{ stage.color }}-lt" title="{{ stage.hint }}">{{ stage.label }}</span>
+                    {% if not provider.configured %}
+                        <span class="badge bg-orange-lt" title="Not listed in survos_dataset.providers, so dataset:scan skips this provider directory.">not scanned</span>
+                    {% endif %}
+                    <span class="badge bg-primary-lt">{{ provider.datasetCount }} datasets</span>
+                    {% if provider.candidateCount %}
+                        <span class="badge bg-azure-lt" title="Known upstream, nothing acquired — browsable alongside the harvested datasets.">{{ provider.candidateCount|number_format }} candidates</span>
+                    {% endif %}
+                    {% if provider.defaultLocale %}
+                        <span class="badge bg-secondary-lt">{{ provider.defaultLocale }}</span>
+                    {% endif %}
+                </div>
+
+                {% if provider.markingCounts %}
+                    <div class="d-flex gap-1 flex-wrap mb-2 small">
+                        {% for marking, count in provider.markingCounts %}
+                            <span class="badge bg-secondary-lt" title="Datasets at workflow place “{{ marking }}”">{{ marking }}: {{ count|number_format }}</span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% if route_exists('meili_insta') and provider.indexInfos %}
+                    <div class="d-flex gap-1 flex-wrap mb-2">
+                        {% for idx in provider.indexInfos|slice(0, 10) %}
+                            <a href="{{ path('meili_insta', {indexName: idx.indexName}) }}" class="badge bg-success-lt text-decoration-none" target="_blank" title="{{ idx.label }}">
+                                {{ idx.indexName }}: {{ idx.documentCount|number_format }}
                             </a>
-                        {% endif %}
+                        {% endfor %}
                     </div>
-                    <div class="card-body">
-                        {% if provider.description %}
-                            <p class="card-text text-muted small">{{ provider.description }}</p>
+                {% endif %}
+
+                {#
+                  The operational half of the card: what implements this provider and how its raw
+                  is acquired. This used to live only in the #[Aggregator] attribute, which meant
+                  reading PHP source to answer "why is this one slow / where does its raw live".
+                #}
+                <dl class="row row-cols-2 g-0 small text-muted mb-2">
+                    {% if provider.adapterShortName %}
+                        <dt class="col-5 fw-normal text-uppercase">Adapter</dt>
+                        <dd class="col-7 mb-0"><code title="{{ provider.adapterClass }}">{{ provider.adapterShortName }}</code></dd>
+                    {% endif %}
+                    {% if provider.entityProviderShortName %}
+                        <dt class="col-5 fw-normal text-uppercase">Entity</dt>
+                        <dd class="col-7 mb-0"><code>{{ provider.entityProviderShortName }}</code></dd>
+                    {% endif %}
+                    {% if provider.primaryItem %}
+                        <dt class="col-5 fw-normal text-uppercase">Primary</dt>
+                        <dd class="col-7 mb-0"><code>{{ provider.primaryItem }}</code></dd>
+                    {% endif %}
+                    <dt class="col-5 fw-normal text-uppercase">Raw</dt>
+                    <dd class="col-7 mb-0">
+                        {{ provider.durableRaw ? 'durable (vault)' : 'disposable' }}{{ provider.compressedRaw ? ', gz' : '' }}
+                    </dd>
+                    {% if provider.capturePath %}
+                        <dt class="col-5 fw-normal text-uppercase">Capture</dt>
+                        <dd class="col-7 mb-0 text-truncate"><code title="{{ provider.capturePath }}">{{ provider.capturePath }}</code></dd>
+                    {% endif %}
+                    {% if provider.syncedAt %}
+                        <dt class="col-5 fw-normal text-uppercase">Synced</dt>
+                        <dd class="col-7 mb-0">{{ provider.syncedAt|date('Y-m-d H:i') }}</dd>
+                    {% endif %}
+                    {% if provider.lastScanAt %}
+                        <dt class="col-5 fw-normal text-uppercase">Scanned</dt>
+                        <dd class="col-7 mb-0">{{ provider.lastScanAt|date('Y-m-d H:i') }}</dd>
+                    {% endif %}
+                </dl>
+
+                {#
+                  Vault loading is the hardest step to administer and its command names are not
+                  uniform, so the command itself is shown rather than left to be remembered.
+                #}
+                <div class="mb-2">
+                    <div class="text-uppercase small text-muted">Load vault</div>
+                    {% if provider.vaultCommand %}
+                        <code class="d-block text-truncate small" title="bin/console {{ provider.vaultCommand }}">bin/console {{ provider.vaultCommand }}</code>
+                    {% else %}
+                        <span class="badge bg-red-lt" title="No <ns>:{{ provider.code }}:vault command found. Set vaultCommand on the #[Aggregator] attribute if it lives elsewhere.">no vault command</span>
+                    {% endif %}
+                    {% if provider.vaultNotes %}
+                        <p class="small text-muted mb-0 mt-1">{{ provider.vaultNotes }}</p>
+                    {% endif %}
+                </div>
+
+                {% if provider.providerCommands %}
+                    <details class="small text-muted mb-2">
+                        <summary class="cursor-pointer">{{ provider.providerCommands|length }} provider command{{ provider.providerCommands|length == 1 ? '' : 's' }}</summary>
+                        <ul class="list-unstyled mb-0 mt-1">
+                            {% for command in provider.providerCommands %}
+                                <li class="text-truncate" title="{{ command.description }}"><code>{{ command.name }}</code></li>
+                            {% endfor %}
+                        </ul>
+                    </details>
+                {% endif %}
+
+                {% if provider.rawAcquisition or provider.metaCreation %}
+                    <details class="small text-muted mb-2">
+                        <summary class="cursor-pointer">Pipeline notes</summary>
+                        {% if provider.rawAcquisition %}<p class="mb-1 mt-1"><strong>Raw:</strong> {{ provider.rawAcquisition }}</p>{% endif %}
+                        {% if provider.metaCreation %}<p class="mb-0"><strong>Meta:</strong> {{ provider.metaCreation }}</p>{% endif %}
+                    </details>
+                {% endif %}
+
+                {% if provider.datasets|length %}
+                    {% set total = provider.datasets|length %}
+                    <ul class="list-unstyled small mb-0">
+                        {% for ds in provider.datasets|slice(0, 10) %}
+                            {% set appDatasetParams = {provider: ds.provider, code: ds.code} %}
+                            {% set datasetUrl = route_exists('app_dataset_detail', appDatasetParams)
+                                ? path('app_dataset_detail', appDatasetParams)
+                                : path('data_bundle_dataset_show', appDatasetParams) %}
+                            <li class="text-truncate" title="{{ ds.datasetKey }}">
+                                <a href="{{ datasetUrl }}" class="text-muted text-decoration-none">{{ ds.label ?: ds.datasetKey }}</a>
+                            </li>
+                        {% endfor %}
+                        {% if total > 10 %}
+                            <li class="text-muted fst-italic">+ {{ total - 10 }} more</li>
                         {% endif %}
-                        <div class="d-flex gap-2 flex-wrap mb-2">
-                            <span class="badge bg-primary-lt">{{ provider.datasetCount }} datasets</span>
-                            <span class="badge bg-azure-lt">{{ provider.candidateCount }} candidates</span>
-                            {% if route_exists('meili_insta') and provider.indexInfos %}
-                                {% for idx in provider.indexInfos|slice(0, 10) %}
-                                    <a href="{{ path('meili_insta', {indexName: idx.indexName}) }}" class="badge bg-success-lt text-decoration-none" target="_blank" title="{{ idx.label }}">
-                                        {{ idx.indexName }}: {{ idx.documentCount|number_format }}
-                                    </a>
-                                {% endfor %}
-                            {% endif %}
-                        </div>
-                        {% if provider.datasets|length %}
-                            {% set total = provider.datasets|length %}
-                            <ul class="list-unstyled small mb-0">
-                                {% for ds in provider.datasets|slice(0, 10) %}
-                                    {% set appDatasetParams = {provider: ds.provider, code: ds.code} %}
-                                    {% set datasetUrl = route_exists('app_dataset_detail', appDatasetParams)
-                                        ? path('app_dataset_detail', appDatasetParams)
-                                        : path('data_bundle_dataset_show', appDatasetParams) %}
-                                    <li class="text-truncate" title="{{ ds.datasetKey }}">
-                                        <a href="{{ datasetUrl }}" class="text-muted text-decoration-none">{{ ds.label ?: ds.datasetKey }}</a>
-                                    </li>
-                                {% endfor %}
-                                {% if total > 10 %}
-                                    <li class="text-muted fst-italic">+ {{ total - 10 }} more</li>
-                                {% endif %}
-                            </ul>
-                        {% endif %}
-                    </div>
-                    <div class="card-footer">
-                        <div class="d-flex gap-2">
-                            <a href="{{ provider.showUrl }}" class="btn btn-sm btn-outline">Browse</a>
-                            <a href="{{ provider.apiUrl }}" class="btn btn-sm btn-outline" target="_blank" title="API Platform">API</a>
-                            {% if route_exists('meili_insta') %}
-                                <a href="{{ path('meili_insta', {indexName: 'md_' ~ provider.code}) }}" class="btn btn-sm btn-outline" target="_blank">Search</a>
-                            {% endif %}
-                        </div>
-                    </div>
+                    </ul>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{ provider.showUrl }}" class="btn btn-sm btn-outline">Browse</a>
+                    <a href="{{ provider.apiUrl }}" class="btn btn-sm btn-outline" target="_blank" title="API Platform">API</a>
+                    {% if route_exists('meili_insta') %}
+                        <a href="{{ path('meili_insta', {indexName: 'md_' ~ provider.code}) }}" class="btn btn-sm btn-outline" target="_blank">Search</a>
+                    {% endif %}
+                    {% if provider.termsUrl %}
+                        <a href="{{ provider.termsUrl }}" class="btn btn-sm btn-outline" target="_blank" rel="noopener">Terms</a>
+                    {% endif %}
+                    {% if route_exists('app_provider_sync') and provider.adapterClass %}
+                        <form method="post" action="{{ path('app_provider_sync', {provider: provider.code}) }}" class="ms-auto">
+                            <input type="hidden" name="_token" value="{{ csrf_token('provider-sync') }}">
+                            <button type="submit" class="btn btn-sm btn-outline" title="Re-read this provider's #[Aggregator] attribute into provider.json and the database">Sync</button>
+                        </form>
+                    {% endif %}
                 </div>
             </div>
-        {% else %}
-            <div class="col-12">
-                <p class="text-muted">No providers found.</p>
+        </div>
+    </div>
+{% endmacro %}
+
+<div class="providers-grid" {{ attributes }}>
+    {% if providers is empty %}
+        <p class="text-muted">No providers found. Run <code>agg:sync</code> to populate the registry from the provider adapters.</p>
+    {% elseif grouped %}
+        {% for stage, rows in byStage %}
+            {% set meta = stage_meta[stage] ?? {label: stage, hint: ''} %}
+            <div class="mb-4">
+                <div class="d-flex align-items-baseline gap-2 mb-2">
+                    <h3 class="fw-bolder mb-0">{{ meta.label }}</h3>
+                    <span class="badge bg-secondary-lt">{{ rows|length }}</span>
+                    {% if meta.hint %}<span class="text-muted small">{{ meta.hint }}</span>{% endif %}
+                </div>
+                <div class="row g-3">
+                    {% for provider in rows %}
+                        {{ cards.provider_card(provider, stage_meta) }}
+                    {% endfor %}
+                </div>
             </div>
         {% endfor %}
-    </div>
+    {% else %}
+        <div class="row g-3">
+            {% for provider in providers %}
+                {{ cards.provider_card(provider, stage_meta) }}
+            {% endfor %}
+        </div>
+    {% endif %}
 </div>
