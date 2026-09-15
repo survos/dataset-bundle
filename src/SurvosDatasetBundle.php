@@ -192,6 +192,10 @@ final class SurvosDatasetBundle extends AbstractBundle
             }
         }
 
+        if (!class_exists(\Survos\FolioBundle\Twig\FolioCoreTwig::class)) {
+            $services->set(\Survos\DatasetBundle\Twig\FolioFallbackTwig::class)->tag('twig.extension');
+        }
+
         if (class_exists(\Survos\AiWorkflowBundle\Entity\Subject::class)) {
             $services->set(SubjectImportListener::class)
                 ->autowire()
