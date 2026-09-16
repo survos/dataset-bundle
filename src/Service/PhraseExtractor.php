@@ -39,6 +39,16 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
  * `sources` records which DTO fields or term sets contributed the same phrase
  * — useful for debugging / future per-context splitting.
  *
+ * Storage is a SQLite spool file per run, not a PHP array. A full newspaper run registers every
+ * article's title and OCR description -- 808,254 records for the Rappahannock News 1949-2009 --
+ * and holding those texts in memory exhausted the 768 MB normalize worker, which then retried
+ * forever. The spool keeps memory flat at any size; the output file and its row order are
+ * unchanged (first-seen order, `sources` in first-seen order).
+ *
+ * Free text is skipped when nothing will ever translate it: an English source with no configured
+ * target locales. Harvest's translation registrar only requests non-English phrases, so for such a
+ * dataset those rows were written and never read. Facet fields and term labels are always kept.
+ *
  * `facet` is true when at least one contributing source is a controlled-vocabulary
  * field (#[PropertyMeta(facet: true)] on the DTO, or a term label via
  * acceptTermLabel()) rather than free text (title, description, ...). Consumed by
@@ -50,10 +60,14 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
  */
 final class PhraseExtractor
 {
-    /** @var array<string, array{locale:string, text:string, sources:list<string>, facet:bool}> hash => row */
-    private array $phrases = [];
+    private ?\PDO $spool = null;
+    private ?string $spoolPath = null;
+    private ?\PDOStatement $insertPhrase = null;
+    private ?\PDOStatement $insertSource = null;
     private ?string $dataset = null;
     private ?string $sourceLocale = null;
+    /** False when free-text fields would never be translated; see the class doc. */
+    private bool $freeText = true;
 
     public function __construct(
         private readonly DataPaths $paths,
@@ -65,9 +79,10 @@ final class PhraseExtractor
 
     public function reset(string $datasetKey, ?string $sourceLocale = null): void
     {
-        $this->phrases      = [];
+        $this->discardSpool();
         $this->dataset      = $datasetKey;
         $this->sourceLocale = $sourceLocale ?? $this->resolveSourceLocale($datasetKey);
+        $this->freeText     = $this->wantsFreeText($datasetKey, $this->sourceLocale);
     }
 
     /** @param array<string, mixed> $normalizedRow */
@@ -88,8 +103,11 @@ final class PhraseExtractor
         }
 
         foreach (TranslatableReflector::fieldsFor($dtoClass) as $field) {
-            $value = $this->resolveMappedValue($normalizedRow, $dtoClass, $field);
             $isFacet = $this->isFacetField($dtoClass, $field);
+            if (!$isFacet && !$this->freeText) {
+                continue;
+            }
+            $value = $this->resolveMappedValue($normalizedRow, $dtoClass, $field);
 
             // list<string> fields (e.g. BaseItemDto::$tags) -- each element is its own phrase,
             // registered under the same content hash a term label with identical text would get
@@ -200,9 +218,24 @@ final class PhraseExtractor
         $writer  = JsonlWriter::open($outFile);
         $written = 0;
         try {
-            foreach ($this->phrases as $code => $row) {
-                $writer->write(['code' => $code] + $row);
-                $written++;
+            if ($this->spool !== null) {
+                $this->spool->commit();
+                // Aggregate ORDER BY (SQLite 3.44+) keeps each phrase's sources in first-seen order.
+                $rows = $this->spool->query(
+                    'SELECT p.code, p.locale, p.text, p.facet, '
+                    . '(SELECT json_group_array(s.source ORDER BY s.rowid) FROM phrase_source s WHERE s.code = p.code) AS sources '
+                    . 'FROM phrase p ORDER BY p.rowid'
+                );
+                foreach ($rows as $row) {
+                    $writer->write([
+                        'code'    => $row['code'],
+                        'locale'  => $row['locale'],
+                        'text'    => $row['text'],
+                        'sources' => json_decode((string) $row['sources'], true, flags: JSON_THROW_ON_ERROR),
+                        'facet'   => (bool) $row['facet'],
+                    ]);
+                    $written++;
+                }
             }
         } finally {
             $writer->close();
@@ -214,7 +247,7 @@ final class PhraseExtractor
             'path'    => $outFile,
         ]);
 
-        $this->phrases      = [];
+        $this->discardSpool();
         $this->dataset      = null;
         $this->sourceLocale = null;
 
@@ -223,7 +256,12 @@ final class PhraseExtractor
 
     public function count(): int
     {
-        return \count($this->phrases);
+        return $this->spool === null ? 0 : (int) $this->spool->query('SELECT COUNT(*) FROM phrase')->fetchColumn();
+    }
+
+    public function __destruct()
+    {
+        $this->discardSpool();
     }
 
     // ── Event API (pipeline wiring) ──────────────────────────────────────────
@@ -236,9 +274,9 @@ final class PhraseExtractor
         }
         // Stage isn't on this event — defer the decision to onRow.
         // We seed dataset early so onRow can lazy-init source locale on the first qualifying row.
+        $this->discardSpool();
         $this->dataset      = $event->dataset;
         $this->sourceLocale = null;
-        $this->phrases      = [];
     }
 
     #[AsEventListener(event: ImportConvertRowEvent::class)]
@@ -251,8 +289,11 @@ final class PhraseExtractor
         }
         // The row event is the source of truth for the dataset: onStart may have
         // bailed (empty started-event dataset) while rows carry an inferred key.
-        $this->dataset      ??= $event->dataset;
-        $this->sourceLocale ??= $this->resolveSourceLocale($event->dataset);
+        $this->dataset ??= $event->dataset;
+        if ($this->sourceLocale === null) {
+            $this->sourceLocale = $this->resolveSourceLocale($event->dataset);
+            $this->freeText     = $this->wantsFreeText($event->dataset, $this->sourceLocale);
+        }
         $this->accept($event->row);
     }
 
@@ -261,7 +302,7 @@ final class PhraseExtractor
     {
         if ($this->sourceLocale === null) {
             // No qualifying rows seen — nothing to do.
-            $this->phrases = [];
+            $this->discardSpool();
             $this->dataset = null;
             return;
         }
@@ -272,23 +313,66 @@ final class PhraseExtractor
 
     private function register(string $text, string $source, bool $isFacet): void
     {
+        $this->openSpool();
         $code = HashUtil::calcSourceKey($text, $this->sourceLocale);
-        if (!isset($this->phrases[$code])) {
-            $this->phrases[$code] = [
-                'locale'  => $this->sourceLocale,
-                'text'    => $text,
-                'sources' => [$source],
-                'facet'   => $isFacet,
-            ];
+        // First text wins (identical text by definition). Identical text can come from both a
+        // facet field and free text (e.g. a tag value that also appears in a description) --
+        // facet is true if any source is a facet field.
+        $this->insertPhrase->execute([$code, $this->sourceLocale, $text, (int) $isFacet]);
+        $this->insertSource->execute([$code, $source]);
+    }
+
+    /** One spool file per run, beside the output, created on the first phrase. */
+    private function openSpool(): void
+    {
+        if ($this->spool !== null) {
             return;
         }
+        $dir = $this->paths->stageDir((string) $this->dataset, Stage::Intl->value, create: true);
+        $this->spoolPath = rtrim($dir, '/') . '/.phrases-spool-' . bin2hex(random_bytes(6)) . '.sqlite';
+        $this->spool = new \PDO('sqlite:' . $this->spoolPath, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+        // A scratch file rebuilt on every run: no journal, no fsync.
+        $this->spool->exec('PRAGMA journal_mode = OFF');
+        $this->spool->exec('PRAGMA synchronous = OFF');
+        $this->spool->exec('CREATE TABLE phrase (code TEXT PRIMARY KEY, locale TEXT NOT NULL, text TEXT NOT NULL, facet INTEGER NOT NULL)');
+        $this->spool->exec('CREATE TABLE phrase_source (code TEXT NOT NULL, source TEXT NOT NULL, UNIQUE (code, source))');
+        $this->insertPhrase = $this->spool->prepare(
+            'INSERT INTO phrase (code, locale, text, facet) VALUES (?, ?, ?, ?) '
+            . 'ON CONFLICT (code) DO UPDATE SET facet = phrase.facet OR excluded.facet'
+        );
+        $this->insertSource = $this->spool->prepare('INSERT OR IGNORE INTO phrase_source (code, source) VALUES (?, ?)');
+        $this->spool->beginTransaction();
+    }
 
-        if (!in_array($source, $this->phrases[$code]['sources'], true)) {
-            $this->phrases[$code]['sources'][] = $source;
+    private function discardSpool(): void
+    {
+        $this->insertPhrase = null;
+        $this->insertSource = null;
+        $this->spool = null;
+        if ($this->spoolPath !== null && is_file($this->spoolPath)) {
+            @unlink($this->spoolPath);
         }
-        // Identical text can come from both a facet field and free text (e.g. a tag value that
-        // also happens to appear in a description) -- true if any source is a facet field.
-        $this->phrases[$code]['facet'] = $this->phrases[$code]['facet'] || $isFacet;
+        $this->spoolPath = null;
+    }
+
+    /**
+     * Whether free-text fields are worth extracting. Only an English source with no configured
+     * target locales is skipped: nothing translates English automatically (harvest's
+     * DatasetTranslationRegistrar requests non-English phrases only), and with no targets
+     * dataset:intl:push has nothing it was asked to do. Any other source keeps free text, because
+     * translating it into English happens whether or not targets are configured.
+     */
+    private function wantsFreeText(string $datasetKey, string $sourceLocale): bool
+    {
+        if (strtolower(explode('-', str_replace('_', '-', $sourceLocale))[0]) !== 'en') {
+            return true;
+        }
+        $targets = $this->datasets->find($datasetKey)?->targetLocales ?: ($this->metaLocale($datasetKey)['targets'] ?? []);
+        if ($targets === []) {
+            $this->logger?->info('phrase extract [{dataset}]: English source with no target locales; free text skipped, facets and terms kept.', ['dataset' => $datasetKey]);
+        }
+
+        return $targets !== [];
     }
 
     /**
@@ -341,20 +425,29 @@ final class PhraseExtractor
     /** locale.default from the dataset's own _meta/dataset.json, or null when unreadable. */
     private function localeFromMeta(string $datasetKey): ?string
     {
+        $locale = $this->metaLocale($datasetKey)['default'] ?? null;
+
+        return is_string($locale) && $locale !== '' ? $locale : null;
+    }
+
+    /** The `locale` block of the dataset's own _meta/dataset.json, or [] when unreadable. */
+    private function metaLocale(string $datasetKey): array
+    {
         $file = rtrim($this->paths->stageDir($datasetKey, Stage::Meta), '/') . '/dataset.json';
         if (!is_file($file)) {
-            return null;
+            return [];
         }
 
         try {
             $data = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
-            return null;
+            return [];
         }
 
-        $locale = is_array($data) ? ($data['locale']['default'] ?? null) : null;
+        // DatasetMetadataEnsurer writes {"dataset": {"locale": {...}}}; older files had it at the top.
+        $locale = is_array($data) ? ($data['dataset']['locale'] ?? $data['locale'] ?? null) : null;
 
-        return is_string($locale) && $locale !== '' ? $locale : null;
+        return is_array($locale) ? $locale : [];
     }
 
     private function defaultOutputPath(string $datasetKey): string
