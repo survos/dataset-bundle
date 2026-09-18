@@ -35,7 +35,7 @@
         "symfony/yaml": "^8.1",
         "survos/import-bundle": "^2.5",
         "survos/ai-workflow-bundle": "^2.5",
-        "api-platform/core": "^4.3",
+        "api-platform/core": "^4.3 || ^5.0",
         "survos/folio-bundle": "^2.5",
         "survos/tabler-bundle": "^2.5",
         "survos/lingua-bundle": "^2.5",
