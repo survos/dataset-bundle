@@ -31,9 +31,12 @@ final class SqliteWalMiddleware implements Middleware
                 $connection = parent::connect($params);
 
                 if (str_contains((string) ($params['driver'] ?? ''), 'sqlite')) {
-                    $connection->exec('PRAGMA journal_mode=WAL');
+                    // Published folio readers explicitly open SQLite in mode=ro.
+                    if (!($params['readOnly'] ?? false)) {
+                        $connection->exec('PRAGMA journal_mode=WAL');
+                        $connection->exec('PRAGMA synchronous=NORMAL');
+                    }
                     $connection->exec('PRAGMA busy_timeout=30000');
-                    $connection->exec('PRAGMA synchronous=NORMAL');
                     $connection->exec('PRAGMA foreign_keys=ON');
                 }
 
