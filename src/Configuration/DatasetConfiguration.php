@@ -48,6 +48,10 @@ final class DatasetConfiguration
         public readonly ?string $type = null,
         public readonly ?string $visibility = null,
 
+        // Tags: editorial and classification labels (kebab-case), e.g. newspaper-source.
+        // Apps select folio sets by criteria over these; see folio-bundle docs/folio-sets.md.
+        public readonly ?array $tags = null,
+
         // Extra data
         public readonly ?array $extras = null,
     ) {}
@@ -83,6 +87,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -108,6 +113,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -133,6 +139,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -158,6 +165,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -183,6 +191,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -208,6 +217,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -233,6 +243,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -258,6 +269,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -283,6 +295,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -308,6 +321,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -333,6 +347,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
     }
@@ -363,8 +378,38 @@ final class DatasetConfiguration
             templates: $templates ?? $this->templates,
             type: $type ?? $this->type,
             visibility: $visibility ?? $this->visibility,
+            tags: $this->tags,
             extras: $this->extras,
         );
+    }
+
+    /**
+     * Replace the tags. Tags are normalized to lowercase kebab-case, de-duplicated and sorted, so
+     * "Newspaper Source" and "newspaper-source" are one tag. An empty list clears them.
+     *
+     * @param list<string> $tags
+     */
+    public function withTags(array $tags): self
+    {
+        return clone($this, ['tags' => self::normalizeTags($tags) ?: null]);
+    }
+
+    public function hasTag(string $tag): bool
+    {
+        return in_array(self::normalizeTags([$tag])[0] ?? '', $this->tags ?? [], true);
+    }
+
+    /** @return list<string> */
+    public static function normalizeTags(array $tags): array
+    {
+        $out = [];
+        foreach ($tags as $tag) {
+            $tag = trim(preg_replace('/[^a-z0-9]+/', '-', strtolower((string) $tag)) ?? '', '-');
+            if ($tag !== '') { $out[$tag] = true; }
+        }
+        $out = array_keys($out);
+        sort($out);
+        return $out;
     }
 
     public function withExtras(?array $extras): self
@@ -388,6 +433,7 @@ final class DatasetConfiguration
             templates: $this->templates,
             type: $this->type,
             visibility: $this->visibility,
+            tags: $this->tags,
             extras: $extras,
         );
     }
@@ -444,6 +490,7 @@ final class DatasetConfiguration
             'templates' => $this->templates,
             'type' => $this->type,
             'visibility' => $this->visibility,
+            'tags' => $this->tags,
             'extras' => $this->extras,
         ];
     }
@@ -479,6 +526,7 @@ final class DatasetConfiguration
             templates: $data['templates'] ?? null,
             type: $data['type'] ?? null,
             visibility: $data['visibility'] ?? null,
+            tags: isset($data['tags']) ? self::normalizeTags((array) $data['tags']) : null,
             extras: $data['extras'] ?? null,
         );
     }

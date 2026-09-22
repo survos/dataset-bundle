@@ -13,6 +13,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Survos\DatasetBundle\Configuration\DatasetConfiguration;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\FieldBundle\Attribute\EntityMeta;
 use Survos\FieldBundle\Attribute\Field;
@@ -236,6 +237,17 @@ final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \
     #[ORM\Column(type: Types::JSONB)]
     public array $meta = [];
 
+    /**
+     * Editorial and classification tags from the dataset's metadata (DatasetConfiguration::$tags),
+     * normalized. Apps select folio sets by criteria over these — see folio-bundle docs/folio-sets.md.
+     *
+     * @return list<string>
+     */
+    #[Groups(['dataset:read'])]
+    public function getTags(): array
+    {
+        return DatasetConfiguration::normalizeTags((array) ($this->meta['tags'] ?? []));
+    }
 
     /** @return array<string, int> */
     #[Groups(['dataset:read'])]
