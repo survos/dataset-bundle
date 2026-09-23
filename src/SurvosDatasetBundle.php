@@ -21,6 +21,14 @@ use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\DatasetBundle\Repository\ProviderRepository;
 use Survos\DatasetBundle\Menu\DataMenuSubscriber;
 use Survos\DatasetBundle\Service\DataPaths;
+
+// Stage moved to Survos\DataContracts\Path\Stage (2026-09-23). An enum cannot be subclassed the
+// way DataPaths is, so the old name is a class_alias in src/Enum/Stage.php — and `instanceof` and
+// parameter type checks do NOT autoload, so that alias has to exist BEFORE anything type-hints the
+// old name. Loading it here means it does, for every app that enables this bundle: this file is
+// read at kernel boot, long before any service is constructed. Static uses (Stage::Raw) autoload
+// on their own; a bare `Stage $stage` parameter is the case that would otherwise fail.
+class_exists(\Survos\DatasetBundle\Enum\Stage::class);
 use Survos\DatasetBundle\Service\HfHubClient;
 use Survos\DatasetBundle\Service\DatasetStageInventory;
 use Survos\DatasetBundle\Service\DatasetRegistryUpdater;
@@ -102,6 +110,10 @@ final class SurvosDatasetBundle extends AbstractBundle
         $container->parameters()->set('survos_dataset.normalized_row_limit', $config['normalized_row_limit']);
         $services = $container->services();
 
+        // The BC subclass is what gets instantiated, because it is the NARROWER type: a service
+        // type-hinting either name then receives something valid (harvest still type-hints the old
+        // name in ~140 places). The data-contracts id is aliased to it just below, which is what
+        // folio-bundle and any new code autowire against.
         $services->set(DataPaths::class)
             ->autowire()
             ->autoconfigure()
@@ -116,6 +128,8 @@ final class SurvosDatasetBundle extends AbstractBundle
                 '$captureRoot' => $config['capture_root'],
                 '$defaultObjectFilename' => $config['default_object_filename'],
             ]);
+
+        $services->alias(\Survos\DataContracts\Path\DataPaths::class, DataPaths::class)->public();
 
         $services->set(ProviderSnapshotCodec::class)
             ->autowire()
