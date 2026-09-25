@@ -30,7 +30,12 @@ final class SqliteWalMiddleware implements Middleware
             {
                 $connection = parent::connect($params);
 
-                if (str_contains((string) ($params['driver'] ?? ''), 'sqlite')) {
+                // Folio connections are left to folio-bundle's FolioConnectionWrapper, which sets WAL
+                // only for writes. Asserting it here on connect wrote WAL into every folio a
+                // request merely read -- ~90 a day on fsn1 from zm's web workers alone -- and a WAL
+                // folio cannot be opened from a read-only mount (inkstory.org, 2026-09-24).
+                $isFolio = is_a((string) ($params['wrapperClass'] ?? ''), 'Survos\\FolioBundle\\DBAL\\FolioConnectionWrapper', true);
+                if (!$isFolio && str_contains((string) ($params['driver'] ?? ''), 'sqlite')) {
                     // Published folio readers explicitly open SQLite in mode=ro.
                     if (!($params['readOnly'] ?? false)) {
                         $connection->exec('PRAGMA journal_mode=WAL');
