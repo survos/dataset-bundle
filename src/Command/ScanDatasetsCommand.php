@@ -5,6 +5,7 @@ namespace Survos\DatasetBundle\Command;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Psr\Log\LoggerInterface;
 use Survos\DatasetBundle\Entity\Artifact;
 use Survos\DatasetBundle\Entity\DatasetInfo;
 use Survos\DatasetBundle\Entity\Provider;
@@ -48,6 +49,7 @@ final class ScanDatasetsCommand extends DataCommand
         private readonly ProviderSnapshotCodec $providerSnapshotCodec,
         private readonly array $enabledProviders = [],
         private readonly ?FolioService $folioService = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {}
 
     private function ensureInitialMarking(DatasetInfo $info): void
@@ -269,6 +271,8 @@ final class ScanDatasetsCommand extends DataCommand
         }
 
         $folioUpdated = 0;
+        /** @var list<array{string,string}> $folioFailures [relative path, error] */
+        $folioFailures = [];
         foreach ($baseFolioFiles as [$dbFile, $relative, $datasetKey]) {
             $folioProviderCode = explode('/', $datasetKey, 2)[0];
             if ($allowedProviders !== [] && !isset($allowedProviders[$folioProviderCode])) {
@@ -302,7 +306,19 @@ final class ScanDatasetsCommand extends DataCommand
                 $info->label ??= $folioEntity->label;
             }
 
-            $summary = $this->summarizeFolio($dbFile);
+            // A folio that cannot be read is not an empty one: keep the artifact's last good
+            // counts rather than nulling them, and say so in the summary.
+            try {
+                $summary = $this->summarizeFolio($dbFile);
+            } catch (\Throwable $e) {
+                $summary = null;
+                $folioFailures[] = [$relative, $e->getMessage()];
+                $this->logger?->warning('dataset:scan could not read folio {file}: {message}', [
+                    'file' => $dbFile,
+                    'message' => $e->getMessage(),
+                    'exception' => $e,
+                ]);
+            }
             $info->objCount = (int) ($info->getCoreCounts()['obj'] ?? $summary['coreCounts']['obj'] ?? $info->objCount);
             $artifact = $this->artifactRepository->findOneBy([
                 'dataset' => $info,
@@ -312,15 +328,19 @@ final class ScanDatasetsCommand extends DataCommand
 
             $artifact->uri = $dbFile;
             $artifact->sizeBytes = filesize($dbFile) ?: null;
-            $artifact->rowCount  = $summary['rowCount'];
-            $artifact->dtoCounts = $summary['dtoCounts'];
             $artifact->updatedAt = (new \DateTimeImmutable())->setTimestamp((int) filemtime($dbFile));
             $artifact->discoveredAt = new \DateTimeImmutable();
-            $artifact->metadata = [
-                'relativePath' => $relative,
-                'cores'        => $summary['cores'],
-                'coreCounts'   => $summary['coreCounts'],
-            ];
+            if ($summary !== null) {
+                $artifact->rowCount  = $summary['rowCount'];
+                $artifact->dtoCounts = $summary['dtoCounts'];
+                $artifact->metadata = [
+                    'relativePath' => $relative,
+                    'cores'        => $summary['cores'],
+                    'coreCounts'   => $summary['coreCounts'],
+                ];
+            } else {
+                $artifact->metadata = ['relativePath' => $relative] + $artifact->metadata;
+            }
 
             $info->addArtifact($artifact);
             $this->em->persist($artifact);
@@ -455,6 +475,11 @@ final class ScanDatasetsCommand extends DataCommand
             'Done — created: %d, updated: %d, skipped: %d, folio DBs matched: %d',
             $created, $updated, $skipped, $folioUpdated
         ));
+
+        if ($folioFailures !== []) {
+            $io->warning(sprintf('%d folio(s) could not be read; their previous counts were kept:', count($folioFailures)));
+            $io->table(['Folio', 'Error'], $folioFailures);
+        }
 
         $io->section('Provider dataset counts');
         $io->table(['Provider', 'Dataset count'], $providerCountRows);
@@ -800,50 +825,48 @@ final class ScanDatasetsCommand extends DataCommand
     }
 
     /**
+     * Throws when the folio cannot be read, so the caller can tell a broken folio from an empty one.
+     *
      * @return array{rowCount:int|null, cores:list<array{code:string,label:?string,rowCount:int}>, coreCounts:array<string,int>, dtoCounts:?array<string,int>}
      */
     private function summarizeFolio(string $dbFile): array
     {
-        $empty = ['rowCount' => null, 'cores' => [], 'coreCounts' => [], 'dtoCounts' => null];
+        // glob() returns dangling symlinks, and PDO would create an empty database at their target.
         if (!is_file($dbFile)) {
-            return $empty;
+            throw new \RuntimeException('Folio file does not exist (dangling symlink?)');
         }
 
-        try {
-            $pdo      = new \PDO('sqlite:' . $dbFile);
-            $rowCount = (int) $pdo->query('SELECT COUNT(*) FROM item')->fetchColumn();
+        $pdo      = new \PDO('sqlite:' . $dbFile, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+        $rowCount = (int) $pdo->query('SELECT COUNT(*) FROM item')->fetchColumn();
 
-            $cores = $pdo->query('SELECT code, label, row_count AS rowCount FROM core ORDER BY code')
-                ->fetchAll(\PDO::FETCH_ASSOC);
+        $cores = $pdo->query('SELECT code, label, row_count AS rowCount FROM core ORDER BY code')
+            ->fetchAll(\PDO::FETCH_ASSOC);
 
-            // Counts by core code.
-            $coreCounts = [];
-            foreach ($cores as $core) {
-                $coreCounts[(string) $core['code']] = (int) $core['rowCount'];
-            }
-
-            // Counts by DTO type, sorted descending.
-            $dtoRows = $pdo->query(
-                'SELECT dto_type, COUNT(*) AS cnt FROM item WHERE dto_type IS NOT NULL GROUP BY dto_type ORDER BY cnt DESC'
-            )->fetchAll(\PDO::FETCH_ASSOC);
-
-            $dtoCounts = [];
-            foreach ($dtoRows as $row) {
-                $dtoCounts[(string) $row['dto_type']] = (int) $row['cnt'];
-            }
-
-            return [
-                'rowCount'   => $rowCount,
-                'cores'      => array_map(static fn(array $r): array => [
-                    'code'     => (string) $r['code'],
-                    'label'    => $r['label'] !== null ? (string) $r['label'] : null,
-                    'rowCount' => (int) $r['rowCount'],
-                ], $cores ?: []),
-                'coreCounts' => $coreCounts,
-                'dtoCounts'  => $dtoCounts ?: null,
-            ];
-        } catch (\Throwable) {
-            return $empty;
+        // Counts by core code.
+        $coreCounts = [];
+        foreach ($cores as $core) {
+            $coreCounts[(string) $core['code']] = (int) $core['rowCount'];
         }
+
+        // Counts by DTO type, sorted descending.
+        $dtoRows = $pdo->query(
+            'SELECT dto_type, COUNT(*) AS cnt FROM item WHERE dto_type IS NOT NULL GROUP BY dto_type ORDER BY cnt DESC'
+        )->fetchAll(\PDO::FETCH_ASSOC);
+
+        $dtoCounts = [];
+        foreach ($dtoRows as $row) {
+            $dtoCounts[(string) $row['dto_type']] = (int) $row['cnt'];
+        }
+
+        return [
+            'rowCount'   => $rowCount,
+            'cores'      => array_map(static fn(array $r): array => [
+                'code'     => (string) $r['code'],
+                'label'    => $r['label'] !== null ? (string) $r['label'] : null,
+                'rowCount' => (int) $r['rowCount'],
+            ], $cores ?: []),
+            'coreCounts' => $coreCounts,
+            'dtoCounts'  => $dtoCounts ?: null,
+        ];
     }
 }
