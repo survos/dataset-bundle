@@ -112,15 +112,16 @@ final class DatasetStageCommands
         );
     }
 
-    #[AsCommand('dataset:folio', 'Build a dataset/provider/all straight from raw: normalize → enrich (claims:fetch + fold current AI) → folio')]
+    #[AsCommand('dataset:folio', 'DEBUG ONLY — probably not what you want. Bypasses the workflow; prefer state:iterate (see the warning it prints)')]
     public function folio(
         SymfonyStyle $io,
         #[MapInput] DatasetInputDTO $input,
         #[Option('Build only this core stem (default: every core in _raw)')] ?string $core = null,
         #[Option('Max collections to build in a fan-out (--provider/--all)')] ?int $limit = null,
         #[Option('Max records per collection/core')] ?int $rowLimit = null,
+        #[Option('Acknowledge the warning and run the debug path anyway (required when non-interactive)')] bool $anyway = false,
     ): int {
-        return $this->normalizeToFolio($io, $input, $core, $core === null, $rowLimit, false, $limit);
+        return $this->normalizeToFolio($io, $input, $core, $core === null, $rowLimit, false, $limit, $anyway);
     }
 
     /**
@@ -137,18 +138,40 @@ final class DatasetStageCommands
      * built): `state:iterate DatasetInfo -m new -t raw --filter="aggregator=<provider>" --em=dataset`
      * (add --sync to run inline for debugging one dataset). Kept working for now; will be removed.
      */
-    private function normalizeToFolio(SymfonyStyle $io, DatasetInputDTO $input, ?string $core, bool $allCores, ?int $rowLimit, bool $profile, ?int $datasetLimit): int
+    private function normalizeToFolio(SymfonyStyle $io, DatasetInputDTO $input, ?string $core, bool $allCores, ?int $rowLimit, bool $profile, ?int $datasetLimit, bool $anyway = false): int
     {
-        $io->warning(
-            'dataset:normalize --folio / dataset:folio are deprecated: they run normalize then enrich+build '
-            . 'as two synchronous, all-or-nothing fan-out passes that bypass DatasetInfo\'s marking/workflow — '
-            . 'one dataset failing to normalize silently skips folio-building for the ENTIRE fan-out. Prefer the '
-            . "real, per-dataset, resilient async workflow instead:\n"
-            . '  state:iterate DatasetInfo -m new -t raw --filter="aggregator=<provider>" --em=dataset'
-            . " [--sync]\n"
-            . '(harvest: see castor.php\'s folio:raw / folio:one / folio:provider tasks). This command still '
-            . 'works for now but will eventually be removed.'
-        );
+        // Deliberately loud, and deliberately specific. The generic version of this warning was
+        // scrolled past repeatedly — including by an agent that then used this command a dozen times
+        // on a dataset that was not even in the registry, and never noticed the workflow had not run.
+        $target = $input->dataset ?? ($input->provider !== null ? $input->provider.'/*' : '<dataset>');
+        $io->warning('dataset:folio is a DEBUG tool. It is probably not doing what you think.');
+        $io->writeln([
+            '  <fg=yellow>What it actually does:</> normalize → enrich → folio:build, in this process, ignoring',
+            '  DatasetInfo\'s marking and the workflow entirely. Consequences, all of which have bitten:',
+            '',
+            '   • The dataset\'s marking does NOT advance. Nothing downstream that waits on a transition',
+            '     (media dispatch, translation, the folio-built listeners) ever fires.',
+            '   • A dataset with no DatasetInfo row still "succeeds" here, so a missing registration is',
+            '     invisible — the files change and the registry never hears about it.',
+            '   • With --provider/--all it is all-or-nothing: one dataset failing to normalize silently',
+            '     skips folio-building for every other dataset in the fan-out.',
+            '',
+            '  <fg=green>What you probably want instead</> — per dataset, resumable, and it moves the marking:',
+            sprintf('     bin/console dataset:register %s', $target),
+            sprintf('     bin/console state:iterate DatasetInfo -t folio --filter="datasetKey=%s" --em=dataset --sync', $target),
+            '',
+            '  Drop --sync to let the queue workers do it. `state:iterate DatasetInfo --stats` shows every',
+            '  dataset\'s marking and which transitions it will accept. See harvest docs/deprecated.md.',
+            '',
+        ]);
+        // An automated caller must say so explicitly: confirm() returns its default without
+        // prompting when non-interactive, so --anyway is the only way through from a script. That
+        // is the point — this path should never be reached by accident.
+        if (!$anyway && !$io->confirm('Run the debug path anyway?', false)) {
+            $io->writeln('Nothing done. Pass --anyway to run it from a script.');
+
+            return Command::SUCCESS;
+        }
 
         $rc = $this->convertStage(
             $io,
