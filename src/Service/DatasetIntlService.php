@@ -10,6 +10,7 @@ use Survos\GeonamesBundle\Dto\GeoRecord;
 use Survos\GeonamesBundle\Service\GeoService;
 use Survos\JsonlBundle\IO\JsonlReader;
 use Survos\JsonlBundle\IO\JsonlWriter;
+use Survos\JsonlBundle\Util\Jsonl;
 use Survos\Lingua\Contracts\Dto\BatchRequest;
 use Survos\LinguaBundle\Service\LinguaClient;
 use Symfony\Component\Console\Attribute\Argument;
@@ -176,20 +177,21 @@ final class DatasetIntlService
     ): int {
         $termsDir = $this->paths->stageDir($dataset, Stage::Terms->value);
         $normDir = $this->paths->stageDir($dataset, Stage::Normalize->value);
-        $termSetFile = "$termsDir/termSet.jsonl";
-        $termFile = "$termsDir/term.jsonl";
+        // Normalized streams may be gzipped once a folio is built, so resolve either form.
+        $termSetFile = Jsonl::resolvePath("$termsDir/termSet.jsonl");
+        $termFile = Jsonl::resolvePath("$termsDir/term.jsonl");
 
         if (!is_file($termSetFile) || !is_file($termFile)) {
             // FolioIngestService currently reads term.jsonl/termSet.jsonl from the
             // normalize stage rather than the (newer) terms stage -- fall back so
             // this works against whichever layout a dataset actually has on disk.
-            $termSetFile = "$normDir/termSet.jsonl";
-            $termFile = "$normDir/term.jsonl";
+            $termSetFile = Jsonl::resolvePath("$normDir/termSet.jsonl");
+            $termFile = Jsonl::resolvePath("$normDir/term.jsonl");
         }
 
         $rowFiles = array_values(array_filter(
-            glob("$normDir/*.jsonl") ?: [],
-            static fn (string $f): bool => !in_array(basename($f), ['term.jsonl', 'termSet.jsonl'], true),
+            Jsonl::files($normDir),
+            static fn (string $f): bool => !in_array(preg_replace('/\.gz$/', '', basename($f)), ['term.jsonl', 'termSet.jsonl'], true),
         ));
 
         if (!is_file($termFile) && $rowFiles === []) {
