@@ -91,6 +91,15 @@ final class DatasetMetadataEnsurer
             $payload = ['dataset' => $configArray];
             $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
+            // Nothing to announce when the file already says exactly this. A provider that writes
+            // metadata per record (a newspaper batch captures an issue at a time) would otherwise
+            // re-announce the same dataset on every record, and the registry's catalog attempt
+            // costs about a second each. Compared as the exact bytes: the file is always written
+            // by this method, so equal bytes means an equal declaration.
+            if (is_file($metaJsonFile) && file_get_contents($metaJsonFile) === $encoded) {
+                return $config;
+            }
+
             $paths->paths->filesystem()->mkdir($paths->metaDir);
             file_put_contents($metaJsonFile, $encoded);
 
