@@ -299,13 +299,6 @@ final class ScanDatasetsCommand extends DataCommand
                 $info->setProviderEntity($providerEntity);
             }
 
-            // Read label from the folio via FolioService; row counts stay core-scoped.
-            if ($this->folioService) {
-                $ctx = $this->folioService->context($datasetKey);
-                $folioEntity = $ctx->em->find(Folio::class, $datasetKey);
-                $info->label ??= $folioEntity->label;
-            }
-
             // A folio that cannot be read is not an empty one: keep the artifact's last good
             // counts rather than nulling them, and say so in the summary.
             try {
@@ -331,10 +324,13 @@ final class ScanDatasetsCommand extends DataCommand
             $artifact->updatedAt = (new \DateTimeImmutable())->setTimestamp((int) filemtime($dbFile));
             $artifact->discoveredAt = new \DateTimeImmutable();
             if ($summary !== null) {
+                $info->label ??= $summary['folioProperties']['label'] ?? null;
+                $info->description ??= $summary['folioProperties']['description'] ?? null;
                 $artifact->rowCount  = $summary['rowCount'];
                 $artifact->dtoCounts = $summary['dtoCounts'];
                 $artifact->metadata = [
                     'relativePath' => $relative,
+                    'folioProperties' => $summary['folioProperties'],
                     'cores'        => $summary['cores'],
                     'coreCounts'   => $summary['coreCounts'],
                 ];
@@ -836,7 +832,7 @@ final class ScanDatasetsCommand extends DataCommand
             throw new \RuntimeException('Folio file does not exist (dangling symlink?)');
         }
 
-        $pdo      = new \PDO('sqlite:' . $dbFile, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+        $pdo      = new \PDO('sqlite:file:' . str_replace('%2F', '/', rawurlencode($dbFile)) . '?mode=ro', null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
         $rowCount = (int) $pdo->query('SELECT COUNT(*) FROM item')->fetchColumn();
 
         $cores = $pdo->query('SELECT code, label, row_count AS rowCount FROM core ORDER BY code')
@@ -859,6 +855,8 @@ final class ScanDatasetsCommand extends DataCommand
         }
 
         return [
+            'folioProperties' => class_exists(\Survos\Folio\PropertyStore::class)
+                ? (new \Survos\Folio\PropertyStore($pdo))->values() : [],
             'rowCount'   => $rowCount,
             'cores'      => array_map(static fn(array $r): array => [
                 'code'     => (string) $r['code'],

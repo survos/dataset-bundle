@@ -73,45 +73,70 @@ final class DatasetMetadataEnsurer
      * Write dataset configuration as JSON.
      * Replaces the YAML-based ensure() method.
      */
-    public function ensureJson(DatasetPaths $paths, DatasetConfiguration $config, bool $write = true): DatasetConfiguration
+    public function ensureJson(DatasetPaths $paths, DatasetConfiguration $config, bool $write = true, ?string $owner = null, array $provenance = []): DatasetConfiguration
     {
-        $metaJsonFile = $paths->metaJson;
-
-        $existing = null;
-        if (is_file($metaJsonFile)) {
-            $content = file_get_contents($metaJsonFile);
-            if ($content !== false) {
-                $existing = json_decode($content, true);
-            }
+        $workFile = $paths->metaJson;
+        $vaultDir = $paths->paths->vaultDatasetDir($paths->datasetKey).'/_meta';
+        $file = $vaultDir.'/dataset.json';
+        $filesystem = $paths->paths->filesystem();
+        if ($write) { $filesystem->mkdir([$vaultDir, $paths->metaDir]); }
+        // Serialize read/merge/replace, not just the final write: concurrent producers must not
+        // overwrite each other's snapshots. Dry runs never create a directory or lock file.
+        $lock = $write ? fopen($file.'.lock', 'c') : null;
+        if ($write && ($lock === false || !flock($lock, LOCK_EX))) {
+            throw new \RuntimeException('Cannot lock dataset metadata: '.$file);
         }
-
-        $configArray = $config->toArray();
-
-        if ($write) {
-            $payload = ['dataset' => $configArray];
-            $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-
-            // Nothing to announce when the file already says exactly this. A provider that writes
-            // metadata per record (a newspaper batch captures an issue at a time) would otherwise
-            // re-announce the same dataset on every record, and the registry's catalog attempt
-            // costs about a second each. Compared as the exact bytes: the file is always written
-            // by this method, so equal bytes means an equal declaration.
-            if (is_file($metaJsonFile) && file_get_contents($metaJsonFile) === $encoded) {
-                return $config;
+        try {
+            $read = static function (string $path): array {
+                if (!is_file($path)) { return []; }
+                $json = (string) file_get_contents($path);
+                $object = json_decode($json, flags: JSON_THROW_ON_ERROR);
+                if (!$object instanceof \stdClass) { throw new \UnexpectedValueException('Expected JSON object: '.$path); }
+                $data = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+                // Configuration maps are arrays, but arbitrary property values must retain JSON
+                // objects (especially {} versus []) through a read/write cycle.
+                foreach ($object->properties ?? [] as $key => $value) { $data['properties'][$key] = $value; }
+                foreach ($object->_metadata->fields ?? [] as $key => $entry) { $data['_metadata']['fields'][$key]['value'] = $entry->value; }
+                foreach ($object->dataset->extras->metadataProperties ?? [] as $key => $entry) { $data['dataset']['extras']['metadataProperties'][$key]['value'] = $entry->value; }
+                return $data;
+            };
+            $existing = $read($file);
+            if (!isset($existing['_metadata'])) {
+                $work = $read($workFile);
+                $newerWork = is_file($workFile) && (!is_file($file) || filemtime($workFile) >= filemtime($file));
+                $existing = \Survos\DataContracts\Metadata\DatasetDocument::mergeLegacy(
+                    $newerWork ? $work : $existing, $newerWork ? $existing : $work,
+                );
             }
-
-            $paths->paths->filesystem()->mkdir($paths->metaDir);
-            file_put_contents($metaJsonFile, $encoded);
-
-            // Only on an actual write: callers that pass write:false are computing a config, not
-            // declaring a dataset. Every provider's meta step funnels through here, so this is the
-            // one place that makes dataset:scan unnecessary for all of them rather than per-provider.
-            $this->eventDispatcher?->dispatch(
-                new DatasetMetaWrittenEvent($paths->datasetKey, $metaJsonFile)
+            $overrideFile = $vaultDir.'/dataset.overrides.json';
+            $workOverrides = $paths->metaDir.'/dataset.overrides.json';
+            $overrideDocument = $read(is_file($overrideFile) ? $overrideFile : $workOverrides);
+            if ($overrideDocument !== [] && (!isset($overrideDocument['properties']) || !is_array($overrideDocument['properties']))) {
+                throw new \UnexpectedValueException('Overrides must contain a properties object.');
+            }
+            if ($write && !is_file($overrideFile) && is_file($workOverrides)) {
+                $filesystem->dumpFile($overrideFile, (string) file_get_contents($workOverrides));
+            }
+            $payload = \Survos\DataContracts\Metadata\DatasetDocument::update(
+                $existing, $config->toArray(), $owner ?? 'dataset:'.$config->aggregator,
+                $overrideDocument['properties'] ?? [], $provenance,
             );
+            $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            $changed = !is_file($file) || file_get_contents($file) !== $encoded
+                || !is_file($workFile) || file_get_contents($workFile) !== $encoded;
+            if ($write && $changed) {
+                // The vault is authoritative. A failed work projection is repaired on retry.
+                $filesystem->dumpFile($file, $encoded);
+                $filesystem->dumpFile($workFile, $encoded);
+            }
+            $resolved = DatasetConfiguration::fromArray($payload['dataset']);
+        } finally {
+            if (is_resource($lock)) { flock($lock, LOCK_UN); fclose($lock); }
         }
-
-        return $config;
+        if ($write && $changed) {
+            $this->eventDispatcher?->dispatch(new DatasetMetaWrittenEvent($paths->datasetKey, $workFile));
+        }
+        return $resolved;
     }
 
     /**

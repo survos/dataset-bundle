@@ -68,4 +68,58 @@ final class DatasetMetadataEnsurerTest extends TestCase
         self::assertSame(0, $announced);
         self::assertFileDoesNotExist($paths->metaJson);
     }
+    #[Test]
+    public function vaultSurvivesWorkDeletionAndOverridesAreReversible(): void
+    {
+        $paths = new DatasetPaths(new DataPaths($this->root), 'cron-america/sn3');
+        $ensurer = new DatasetMetadataEnsurer();
+        $config = DatasetConfiguration::create($paths->datasetKey, 'cron-america')->withLabel('Generated title')
+            ->withDescription('Source description')->withExtra('titleRecord', ['essay' => 'Source essay']);
+        $ensurer->ensureJson($paths, $config, owner: 'loc.title');
+        $vault = $paths->paths->vaultDatasetDir($paths->datasetKey).'/_meta';
+        self::assertFileExists($vault.'/dataset.json');
+        file_put_contents($vault.'/dataset.overrides.json', json_encode(['properties' => ['description' => 'Human correction']]));
+        $fs = new Filesystem(); $fs->remove($paths->dir);
+        $coverage = DatasetConfiguration::create($paths->datasetKey, 'cron-america')->withExtra('coverage', ['pages' => 200]);
+        $resolved = $ensurer->ensureJson($paths, $coverage, owner: 'loc.coverage');
+        self::assertSame('Human correction', $resolved->description);
+        self::assertSame('Source essay', $resolved->extras['titleRecord']['essay']);
+        self::assertSame(file_get_contents($vault.'/dataset.json'), file_get_contents($paths->metaJson));
+        file_put_contents($vault.'/dataset.overrides.json', '{"properties":{}}');
+        $resolved = $ensurer->ensureJson($paths, $coverage, owner: 'loc.coverage');
+        self::assertSame('Source description', $resolved->description);
+    }
+
+    #[Test]
+    public function malformedExistingMetadataIsNotOverwritten(): void
+    {
+        $paths = new DatasetPaths(new DataPaths($this->root), 'cron-america/sn4');
+        (new Filesystem())->mkdir($paths->metaDir);
+        file_put_contents($paths->metaJson, '{broken');
+        try {
+            (new DatasetMetadataEnsurer())->ensureJson($paths, DatasetConfiguration::create($paths->datasetKey, 'cron-america'));
+            self::fail('Invalid JSON must fail');
+        } catch (\JsonException) {
+            self::assertSame('{broken', file_get_contents($paths->metaJson));
+        }
+    }
+
+    #[Test]
+    public function unknownOverrideObjectsKeepTheirJsonShape(): void
+    {
+        $paths = new DatasetPaths(new DataPaths($this->root), 'cron-america/sn5');
+        $vault = $paths->paths->vaultDatasetDir($paths->datasetKey).'/_meta';
+        (new Filesystem())->mkdir($vault);
+        file_put_contents($vault.'/dataset.overrides.json', '{"properties":{"custom.object":{"empty":{},"list":[]}}}');
+        $ensurer = new DatasetMetadataEnsurer();
+        $config = DatasetConfiguration::create($paths->datasetKey, 'cron-america');
+        $ensurer->ensureJson($paths, $config);
+        $before = file_get_contents($vault.'/dataset.json');
+        $ensurer->ensureJson($paths, $config);
+        self::assertSame($before, file_get_contents($vault.'/dataset.json'));
+        $value = json_decode($before)->dataset->extras->metadataProperties->{'custom.object'}->value;
+        self::assertInstanceOf(\stdClass::class, $value->empty);
+        self::assertSame([], $value->list);
+    }
+
 }
