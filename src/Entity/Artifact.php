@@ -6,8 +6,9 @@ namespace Survos\DatasetBundle\Entity;
 use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Doctrine\Orm\Filter\RangeFilter;
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
-use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Doctrine\Orm\Filter\ExactFilter;
+use ApiPlatform\Doctrine\Orm\Filter\PartialSearchFilter;
+use ApiPlatform\Metadata\QueryParameter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -45,10 +46,14 @@ use Symfony\Component\Serializer\Attribute\Groups;
     ],
     normalizationContext: ['groups' => ['artifact:read']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['dataset.datasetKey' => 'partial', 'type' => 'exact', 'code' => 'exact', 'uri' => 'partial'])]
-#[ApiFilter(OrderFilter::class, properties: ['type', 'code', 'sizeBytes', 'rowCount', 'updatedAt'])]
-#[ApiFilter(RangeFilter::class, properties: ['sizeBytes', 'rowCount'])]
-#[ApiFilter(DateFilter::class, properties: ['updatedAt'])]
+#[QueryParameter(key: 'dataset.datasetKey', property: 'dataset.datasetKey', filter: new PartialSearchFilter(caseSensitive: true))]
+#[QueryParameter(key: 'type', property: 'type', filter: new ExactFilter())]
+#[QueryParameter(key: 'code', property: 'code', filter: new ExactFilter())]
+#[QueryParameter(key: 'uri', property: 'uri', filter: new PartialSearchFilter(caseSensitive: true))]
+#[QueryParameter(key: 'order[:property]', properties: ['type', 'code', 'sizeBytes', 'rowCount', 'updatedAt'], filter: new OrderFilter())]
+#[QueryParameter(key: 'sizeBytes', property: 'sizeBytes', filter: new RangeFilter())]
+#[QueryParameter(key: 'rowCount', property: 'rowCount', filter: new RangeFilter())]
+#[QueryParameter(key: 'updatedAt', property: 'updatedAt', filter: new DateFilter())]
 class Artifact
 {
     public const TYPE_FOLIO = 'folio';

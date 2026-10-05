@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Service;
 
+use Survos\DataContracts\Path\DataPaths;
+
 use Doctrine\Persistence\ManagerRegistry;
 use Survos\DatasetBundle\Entity\DatasetInfo;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;

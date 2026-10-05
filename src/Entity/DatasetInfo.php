@@ -4,8 +4,9 @@ declare(strict_types=1);
 namespace Survos\DatasetBundle\Entity;
 
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
-use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Doctrine\Orm\Filter\ExactFilter;
+use ApiPlatform\Doctrine\Orm\Filter\PartialSearchFilter;
+use ApiPlatform\Metadata\QueryParameter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -50,8 +51,13 @@ use Symfony\Component\Serializer\Attribute\Groups;
     ],
     normalizationContext: ['groups' => ['dataset:read', 'marking']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['datasetKey' => 'partial', 'label' => 'partial', 'aggregator' => 'exact', 'marking' => 'exact', 'status' => 'exact', 'country' => 'exact'])]
-#[ApiFilter(OrderFilter::class, properties: ['datasetKey', 'label', 'aggregator', 'marking', 'status', 'objCount', 'normalizedCount', 'lastScanned'])]
+#[QueryParameter(key: 'datasetKey', property: 'datasetKey', filter: new PartialSearchFilter(caseSensitive: true))]
+#[QueryParameter(key: 'label', property: 'label', filter: new PartialSearchFilter(caseSensitive: true))]
+#[QueryParameter(key: 'aggregator', property: 'aggregator', filter: new ExactFilter())]
+#[QueryParameter(key: 'marking', property: 'marking', filter: new ExactFilter())]
+#[QueryParameter(key: 'status', property: 'status', filter: new ExactFilter())]
+#[QueryParameter(key: 'country', property: 'country', filter: new ExactFilter())]
+#[QueryParameter(key: 'order[:property]', properties: ['datasetKey', 'label', 'aggregator', 'marking', 'status', 'objCount', 'normalizedCount', 'lastScanned'], filter: new OrderFilter())]
 final class DatasetInfo implements RouteParametersInterface, MarkingInterface, \Stringable
 {
     use RouteIdentityTrait;

@@ -7,7 +7,7 @@ namespace Survos\DatasetBundle\Command;
 use Survos\DatasetBundle\Event\DatasetIterateFinishedEvent;
 use Survos\DatasetBundle\Event\DatasetIterateRowEvent;
 use Survos\DatasetBundle\Event\DatasetIterateStartedEvent;
-use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DataContracts\Path\DataPaths;
 use Survos\DatasetBundle\Service\DatasetPaths;
 use Survos\JsonlBundle\IO\JsonlReader;
 use Symfony\Component\Console\Attribute\AsCommand;

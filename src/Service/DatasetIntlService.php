@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Service;
 
+use Survos\DataContracts\Path\DataPaths;
+
 use Psr\Log\LoggerInterface;
-use Survos\DatasetBundle\Enum\Stage;
+use Survos\DataContracts\Path\Stage;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\GeonamesBundle\Dto\GeoRecord;
 use Survos\GeonamesBundle\Service\GeoService;

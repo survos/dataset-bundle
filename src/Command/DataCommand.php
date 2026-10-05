@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Command;
 
-use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DataContracts\Path\DataPaths;
 use Symfony\Contracts\Service\Attribute\Required;
 
 /**

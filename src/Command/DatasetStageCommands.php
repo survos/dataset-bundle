@@ -4,10 +4,10 @@ declare(strict_types=1);
 namespace Survos\DatasetBundle\Command;
 
 use Survos\DatasetBundle\Entity\DatasetInfo;
-use Survos\DatasetBundle\Enum\Stage;
+use Survos\DataContracts\Path\Stage;
 use Survos\DatasetBundle\Input\DatasetInputDTO;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
-use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DataContracts\Path\DataPaths;
 use Survos\DatasetBundle\Service\DatasetPaths;
 use Survos\ClaimsBundle\Service\ClaimsVaultWriter;
 use Survos\ImportBundle\Command\ImportConvertCommand;

@@ -5,8 +5,8 @@ namespace Survos\DatasetBundle\Tests\Service;
 
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use Survos\DatasetBundle\Enum\Stage;
-use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DataContracts\Path\Stage;
+use Survos\DataContracts\Path\DataPaths;
 use Survos\DatasetBundle\Service\PhraseExtractor;
 use Symfony\Component\Filesystem\Filesystem;
 

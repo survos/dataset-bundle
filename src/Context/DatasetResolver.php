@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Context;
 
-use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DataContracts\Path\DataPaths;
 use Symfony\Component\Console\Input\InputInterface;
 
 use function getenv;

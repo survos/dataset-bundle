@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Survos\DatasetBundle\Command;
 
 use Survos\DatasetBundle\Meta\DatasetMetadataLoader;
-use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DataContracts\Path\DataPaths;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;

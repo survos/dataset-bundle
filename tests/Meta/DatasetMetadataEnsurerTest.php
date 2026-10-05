@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Survos\DatasetBundle\Configuration\DatasetConfiguration;
 use Survos\DatasetBundle\Event\DatasetMetaWrittenEvent;
 use Survos\DatasetBundle\Meta\DatasetMetadataEnsurer;
-use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DataContracts\Path\DataPaths;
 use Survos\DatasetBundle\Service\DatasetPaths;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Filesystem\Filesystem;

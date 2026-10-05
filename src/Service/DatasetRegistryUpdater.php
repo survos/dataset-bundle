@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Service;
 
+use Survos\DataContracts\Path\DataPaths;
+
 use Doctrine\ORM\EntityManagerInterface;
 use Survos\DatasetBundle\Entity\Artifact;
 use Survos\DatasetBundle\Entity\DatasetInfo;

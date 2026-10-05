@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Command;
 
-use Survos\DatasetBundle\Service\DataPaths;
+use Survos\DataContracts\Path\DataPaths;
 use Survos\DatasetBundle\Service\HfHubClient;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;

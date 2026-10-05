@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Service;
 
+use Survos\DataContracts\Path\DataPaths;
+
 use Psr\Log\LoggerInterface;
 use Survos\DataContracts\Attribute\PropertyMeta;
 use Survos\DataContracts\Metadata\ContentType;
-use Survos\DatasetBundle\Enum\Stage;
+use Survos\DataContracts\Path\Stage;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\ImportBundle\Event\ImportConvertFinishedEvent;
 use Survos\ImportBundle\Event\ImportConvertRowEvent;

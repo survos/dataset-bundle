@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace Survos\DatasetBundle\Service;
 
-use Survos\DatasetBundle\Enum\Stage;
+use Survos\DataContracts\Path\DataPaths;
+
+use Survos\DataContracts\Path\Stage;
 
 /**
  * Dataset-scoped view over DataPaths.

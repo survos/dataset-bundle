@@ -6,14 +6,6 @@ namespace Survos\DatasetBundle\Service;
 
 use Survos\DataContracts\Path\DataPaths as ContractDataPaths;
 
-trigger_deprecation(
-    'survos/dataset-bundle',
-    '2.32',
-    'Type-hinting %s is deprecated, use %s instead. The path vocabulary moved to survos/data-contracts so a reading app can resolve folio paths without installing the production registry.',
-    DataPaths::class,
-    ContractDataPaths::class,
-);
-
 /**
  * BC subclass. The real class is {@see ContractDataPaths} (moved 2026-09-23).
  *
@@ -31,11 +23,25 @@ trigger_deprecation(
  * DataPaths given"). Inheritance is checked on the object's real class chain instead, so it holds
  * no matter what has been loaded.
  *
- * Because the old name is the narrower type, THIS is the class the container must instantiate:
- * SurvosDatasetBundle registers it and aliases the data-contracts id to it, so a service
- * type-hinting either name gets something valid. Code should migrate to the contracts class; the
- * deprecation above marks every remaining old-name import.
+ * The bundle registers this as a separate deprecated service. Canonical consumers receive
+ * ContractDataPaths directly; old consumers still receive this narrower type.
+ *
+ * @deprecated Use ContractDataPaths instead.
  */
 class DataPaths extends ContractDataPaths
 {
+    #[\Deprecated(message: 'Use Survos\\DataContracts\\Path\\DataPaths instead.', since: '2.32')]
+    public function __construct(
+        string $dataDir,
+        string $worksRoot = 'work',
+        string $datasetRoot = 'work',
+        string $artifactRoot = 'artifacts',
+        string $runsRoot = 'runs',
+        string $cacheRoot = 'cache',
+        string $zipsRoot = 'vault',
+        ?string $captureRoot = null,
+        string $defaultObjectFilename = 'obj.jsonl',
+    ) {
+        parent::__construct($dataDir, $worksRoot, $datasetRoot, $artifactRoot, $runsRoot, $cacheRoot, $zipsRoot, $captureRoot, $defaultObjectFilename);
+    }
 }

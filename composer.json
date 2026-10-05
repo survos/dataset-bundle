@@ -23,7 +23,7 @@
         "symfony/filesystem": "^8.1",
         "symfony/console": "^8.1",
         "symfony/ux-twig-component": "^3",
-        "survos/data-contracts": "^2.5",
+        "survos/data-contracts": "^2.32",
         "survos/lingua-contracts": "^2.5",
         "survos/lingua-core": "^2.5",
         "survos/jsonl-bundle": "^2.5",
