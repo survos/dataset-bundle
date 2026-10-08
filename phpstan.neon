@@ -22,6 +22,17 @@ parameters:
         -
             identifier: method.unused
             path: src/Meta/DatasetMetadataEnsurer.php
+        # BC shim: the class exists only via class_alias().
+        -
+            identifier: class.notFound
+            path: src/Enum/Stage.php
+        # readOnly is a custom connection param that DBAL's Params shape does not declare.
+        -
+            identifier: nullCoalesce.offset
+            path: src/Doctrine/SqliteWalMiddleware.php
+        -
+            identifier: booleanNot.alwaysTrue
+            path: src/Doctrine/SqliteWalMiddleware.php
         # False positive: clients are not dependencies of this project.
 #        -
 #            message: '#Return typehint of method KnpU\\OAuth2ClientBundle\\Client\\Provider\\[a-zA-Z0-9\\_]+::fetchUserFromToken\(\) has invalid type [a-zA-Z0-9\\_]#'

@@ -10,7 +10,6 @@ use Survos\DatasetBundle\Entity\Artifact;
 use Survos\DatasetBundle\Entity\DatasetInfo;
 use Survos\DatasetBundle\Entity\Provider;
 use Survos\FolioBundle\Entity\Folio;
-use Survos\FolioBundle\Service\FolioService;
 use Survos\DatasetBundle\Repository\ArtifactRepository;
 use Survos\DatasetBundle\Repository\DatasetInfoRepository;
 use Survos\DatasetBundle\Repository\ProviderRepository;
@@ -48,7 +47,6 @@ final class ScanDatasetsCommand extends DataCommand
         private readonly DatasetInfoRepository $datasetRepository,
         private readonly ProviderSnapshotCodec $providerSnapshotCodec,
         private readonly array $enabledProviders = [],
-        private readonly ?FolioService $folioService = null,
         private readonly ?LoggerInterface $logger = null,
     ) {}
 
@@ -740,7 +738,7 @@ final class ScanDatasetsCommand extends DataCommand
         }
 
         $info->normalizedCount = $recordCount;
-        if (($info->objCount ?? 0) === 0 && (int) ($info->normalizedCount ?? 0) > 0) {
+        if ($info->objCount === 0 && (int) ($info->normalizedCount ?? 0) > 0) {
             $info->objCount = (int) $info->normalizedCount;
         }
 
@@ -823,7 +821,7 @@ final class ScanDatasetsCommand extends DataCommand
     /**
      * Throws when the folio cannot be read, so the caller can tell a broken folio from an empty one.
      *
-     * @return array{rowCount:int|null, cores:list<array{code:string,label:?string,rowCount:int}>, coreCounts:array<string,int>, dtoCounts:?array<string,int>}
+     * @return array{folioProperties:array<string,mixed>, rowCount:int|null, cores:list<array{code:string,label:?string,rowCount:int}>, coreCounts:array<string,int>, dtoCounts:?array<string,int>}
      */
     private function summarizeFolio(string $dbFile): array
     {

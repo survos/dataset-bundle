@@ -65,7 +65,7 @@ final class DatasetIntlService
             ? $this->parseTargets($targetsArg)
             : ($info?->targetLocales ?: $this->parseTargets($targetsDefault));
 
-        $engine = $engineArg ?? $info?->preferredEngine ?? $engineDefault;
+        $engine = $engineArg ?? $info->preferredEngine ?? $engineDefault;
 
         return ['targets' => $targets, 'engine' => $engine];
     }
