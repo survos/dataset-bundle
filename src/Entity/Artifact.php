@@ -88,7 +88,8 @@ class Artifact
     #[Groups(['artifact:read', 'dataset:read'])]
     public ?string $uri = null;
 
-    #[ORM\Column(nullable: true)]
+    // BIGINT: folio archives pass 2 GiB (NARA's are ~14 GB); a plain int is 32-bit INT on Postgres.
+    #[ORM\Column(type: Types::BIGINT, nullable: true)]
     #[Groups(['artifact:read', 'dataset:read'])]
     public ?int $sizeBytes = null;
 

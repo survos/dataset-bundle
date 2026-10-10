@@ -68,7 +68,7 @@ final class ProviderSnapshot
     /** Prerequisites, cost and gotchas for the vault step. */
     #[Groups(['provider:snapshot'])]
     public ?string $vaultNotes = null;
-    /** @var list<array{name: string, description: string}> every console command scoped to this provider */
+    /** @var list<array{name: string, description: string, role?: string}> every console command scoped to this provider; role as the app declares it (acquire, inventory, archive, analysis, export, debug, deprecated, other) */
     #[Groups(['provider:snapshot'])]
     public array $providerCommands = [];
 }

@@ -55,7 +55,8 @@ class Provider implements RouteParametersInterface, \Stringable
     #[ORM\Column(length: 10, nullable: true)]
     private ?string $defaultLocale = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
+    // TEXT, like the other prose columns: a reuse statement is not bounded by 255 characters.
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $dataReuse = null;
 
     #[ORM\Column(length: 255, nullable: true)]
@@ -107,8 +108,8 @@ class Provider implements RouteParametersInterface, \Stringable
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $rawAcquisition = null;
 
-    /** Capture location when the provider has a distinct capture step. */
-    #[ORM\Column(length: 255, nullable: true)]
+    /** Capture location when the provider has a distinct capture step (prose; Euro's runs past 400 chars). */
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $capturePath = null;
 
     /**

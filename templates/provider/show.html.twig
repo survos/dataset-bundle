@@ -109,15 +109,36 @@
             {% endif %}
 
             {% if provider.providerCommands %}
-              <h4 class="fw-bolder mt-3">All {{ provider.code }} commands</h4>
+              {# Grouped by the role the app declares per command (e.g. Harvest's #[Aggregator(commandRoles)]),
+                 pipeline first. Providers that declare none keep the single flat list. #}
+              {% set roleOrder = {
+                acquire: 'Acquire one dataset (the pipeline entry)',
+                inventory: 'Inventory (once per provider)',
+                archive: 'Source archives',
+                analysis: 'Analysis',
+                export: 'Exports for other apps',
+                debug: 'Single-item tools',
+                other: 'Other',
+                deprecated: 'Deprecated',
+              } %}
+              {% set declared = provider.providerCommands|filter(c => (c.role ?? 'other') != 'other')|length > 0 %}
+              <h4 class="fw-bolder mt-3">{{ provider.code }} commands</h4>
               <div class="table-responsive">
                 <table class="table table-sm">
                   <tbody>
-                    {% for command in provider.providerCommands %}
-                      <tr>
-                        <td style="width: 1%;"><code class="text-nowrap">{{ command.name }}</code></td>
-                        <td class="text-muted small">{{ command.description }}</td>
-                      </tr>
+                    {% for role, heading in (declared ? roleOrder : {other: null}) %}
+                      {% set group = provider.providerCommands|filter(c => (c.role ?? 'other') == role) %}
+                      {% if group|length %}
+                        {% if heading %}
+                          <tr><th colspan="2" class="pt-3 {{ role == 'acquire' ? 'text-success' : (role == 'deprecated' ? 'text-danger' : '') }}">{{ heading }}</th></tr>
+                        {% endif %}
+                        {% for command in group %}
+                          <tr class="{{ role == 'deprecated' ? 'text-decoration-line-through opacity-50' : '' }}">
+                            <td style="width: 1%;"><code class="text-nowrap">{{ command.name }}</code></td>
+                            <td class="text-muted small">{{ command.description }}</td>
+                          </tr>
+                        {% endfor %}
+                      {% endif %}
                     {% endfor %}
                   </tbody>
                 </table>
