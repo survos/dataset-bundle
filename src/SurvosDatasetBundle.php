@@ -94,6 +94,21 @@ final class SurvosDatasetBundle extends AbstractBundle
                         ->end()
                     ->end()
                 ->end()
+                ->arrayNode('harvest_sync')
+                    ->info('A consuming app\'s harvest:sync (full fetch or change-feed replay from folio-bundle\'s dataset_api) and its five-minute schedule. Off by default: Harvest, the producer, uses this bundle too. The app\'s own migration creates harvest_sync_checkpoint.')
+                    ->canBeEnabled()
+                    ->children()
+                        ->enumNode('scope')->values(['folio_sets', 'all'])->defaultValue('folio_sets')
+                            ->info('folio_sets: hold the members of survos_folio.folio_sets. all: every published dataset.')
+                        ->end()
+                        ->scalarNode('lock_factory')->defaultValue('lock.factory')
+                            ->info('LockFactory service id shared by manual and scheduled runs; use a PostgreSQL advisory store in production (a flock only excludes within one container).')
+                        ->end()
+                        ->booleanNode('schedule')->defaultTrue()
+                            ->info('Register the "harvest" schedule (every 5 minutes), consumed by messenger:consume scheduler_harvest.')
+                        ->end()
+                    ->end()
+                ->end()
             ->end();
     }
 
@@ -309,6 +324,26 @@ final class SurvosDatasetBundle extends AbstractBundle
                 '$databasePrefix' => $config['tenant_database_prefix'],
                 '$tenants' => $config['tenants'],
             ]);
+
+        // A consumer's Harvest sync, outside src/Command so Harvest itself never registers it.
+        if ($config['harvest_sync']['enabled'] && class_exists(\Survos\FolioBundle\Catalog\FolioCatalogClient::class)) {
+            $services->set(Harvest\SyncState::class)
+                ->autowire()
+                ->arg('$em', new Reference('doctrine.orm.default_entity_manager'))
+                ->arg('$locks', new Reference($config['harvest_sync']['lock_factory']));
+            $services->set(Harvest\HarvestSync::class)
+                ->autowire()
+                ->autoconfigure()
+                ->args([
+                    '$scope' => $config['harvest_sync']['scope'],
+                    '$localPassthrough' => '%survos_folio.local_passthrough%',
+                    '$sets' => new Reference(\Survos\FolioBundle\Set\FolioSetResolver::class, ContainerInterface::NULL_ON_INVALID_REFERENCE),
+                    '$recordSets' => new Reference(\Survos\FolioBundle\Command\FolioSetsSyncCommand::class, ContainerInterface::NULL_ON_INVALID_REFERENCE),
+                ]);
+            if ($config['harvest_sync']['schedule'] && class_exists(\Symfony\Component\Scheduler\Attribute\AsSchedule::class)) {
+                $services->set(Harvest\HarvestSchedule::class)->autowire()->autoconfigure();
+            }
+        }
     }
 
     public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
@@ -392,6 +427,39 @@ final class SurvosDatasetBundle extends AbstractBundle
                     ],
                 ],
             ]);
+
+            // The Harvest checkpoint lives in the app's own database, like Str/Tr: mapped into the
+            // default entity manager, its table created by the app's migration.
+            $harvestSync = false;
+            foreach ($builder->getExtensionConfig('survos_dataset') as $extensionConfig) {
+                $value = $extensionConfig['harvest_sync'] ?? null;
+                if ($value === true || (is_array($value) && ($value['enabled'] ?? true))) {
+                    $harvestSync = true;
+                }
+            }
+            if ($harvestSync) {
+                $defaultEm = 'default';
+                foreach ($builder->getExtensionConfig('doctrine') as $doctrineConfig) {
+                    $defaultEm = $doctrineConfig['orm']['default_entity_manager'] ?? $defaultEm;
+                }
+                $builder->prependExtensionConfig('doctrine', [
+                    'orm' => [
+                        'entity_managers' => [
+                            $defaultEm => [
+                                'mappings' => [
+                                    'SurvosDatasetHarvest' => [
+                                        'is_bundle' => false,
+                                        'type' => 'attribute',
+                                        'dir' => dirname(__DIR__) . '/src/Harvest/Entity',
+                                        'prefix' => 'Survos\DatasetBundle\Harvest\Entity',
+                                        'alias' => 'SurvosDatasetHarvest',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ]);
+            }
         }
 
         if ($builder->hasExtension('api_platform')) {

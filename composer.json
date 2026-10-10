@@ -42,11 +42,13 @@
         "survos/lingua-bundle": "^2.5",
         "survos/geonames-bundle": "^2.5",
         "survos/meili-bundle": "^2.5",
-        "meilisearch/meilisearch-php": "dev-main"
+        "meilisearch/meilisearch-php": "dev-main",
+        "symfony/scheduler": "^8.1"
     },
     "suggest": {
         "survos/ai-workflow-bundle": "Wires DatasetIterateRowEvent \u2192 Subject creation for AI workflow pipelines",
-        "survos/geonames-bundle": "dataset:intl:push resolves place-name phrases via GeoService::alternateNames() instead of routing them through Lingua's MT"
+        "survos/geonames-bundle": "dataset:intl:push resolves place-name phrases via GeoService::alternateNames() instead of routing them through Lingua's MT",
+        "symfony/scheduler": "Runs harvest:sync every five minutes (survos_dataset.harvest_sync.schedule)"
     },
     "prefer-stable": true,
     "extra": {
