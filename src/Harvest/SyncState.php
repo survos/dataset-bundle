@@ -31,9 +31,16 @@ final readonly class SyncState
     public function save(array $state): void
     {
         $row = $this->em->find(HarvestSyncCheckpoint::class, 'harvest') ?? new HarvestSyncCheckpoint();
+        $previous = $row->checkpoint;
         $row->checkpoint = $state;
-        $this->em->persist($row);
-        $this->em->flush();
+        try {
+            $this->em->persist($row);
+            $this->em->flush();
+        } catch (\Throwable $error) {
+            // A worker keeps this row in memory; it must not believe an unsaved checkpoint.
+            $row->checkpoint = $previous;
+            throw $error;
+        }
     }
 
     public function locked(callable $work): mixed

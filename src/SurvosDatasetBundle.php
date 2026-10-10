@@ -98,8 +98,8 @@ final class SurvosDatasetBundle extends AbstractBundle
                     ->info('A consuming app\'s harvest:sync (full fetch or change-feed replay from folio-bundle\'s dataset_api) and its five-minute schedule. Off by default: Harvest, the producer, uses this bundle too. The app\'s own migration creates harvest_sync_checkpoint.')
                     ->canBeEnabled()
                     ->children()
-                        ->enumNode('scope')->values(['folio_sets', 'all'])->defaultValue('folio_sets')
-                            ->info('folio_sets: hold the members of survos_folio.folio_sets. all: every published dataset.')
+                        ->enumNode('scope')->values(['folio_sets', 'all', 'app'])->defaultValue('folio_sets')
+                            ->info('folio_sets: hold the members of survos_folio.folio_sets. all: every published dataset. app: what the app\'s Harvest\\HarvestSelection service returns.')
                         ->end()
                         ->scalarNode('lock_factory')->defaultValue('lock.factory')
                             ->info('LockFactory service id shared by manual and scheduled runs; use a PostgreSQL advisory store in production (a flock only excludes within one container).')
@@ -339,6 +339,7 @@ final class SurvosDatasetBundle extends AbstractBundle
                     '$localPassthrough' => '%survos_folio.local_passthrough%',
                     '$sets' => new Reference(\Survos\FolioBundle\Set\FolioSetResolver::class, ContainerInterface::NULL_ON_INVALID_REFERENCE),
                     '$recordSets' => new Reference(\Survos\FolioBundle\Command\FolioSetsSyncCommand::class, ContainerInterface::NULL_ON_INVALID_REFERENCE),
+                    '$selection' => new Reference(Harvest\HarvestSelection::class, ContainerInterface::NULL_ON_INVALID_REFERENCE),
                 ]);
             if ($config['harvest_sync']['schedule'] && class_exists(\Symfony\Component\Scheduler\Attribute\AsSchedule::class)) {
                 $services->set(Harvest\HarvestSchedule::class)->autowire()->autoconfigure();

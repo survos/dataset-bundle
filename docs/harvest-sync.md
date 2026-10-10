@@ -6,7 +6,7 @@ An app that reads folios from Harvest enables the sync instead of writing its ow
 # config/packages/survos_dataset.yaml
 survos_dataset:
     harvest_sync:
-        scope: folio_sets          # or "all": every published dataset
+        scope: folio_sets          # or "all": every published dataset; or "app": see below
         # lock_factory: app.harvest_sync_lock_factory   # PostgreSQL advisory store in production
 ```
 
@@ -19,12 +19,16 @@ It needs folio-bundle with `dataset_api` enabled (`HARVEST_SERVER`, `HARVEST_REA
   `messenger:consume scheduler_harvest` (one replica). `schedule: false` leaves it out.
 
 Selection: scope `folio_sets` holds the members of `survos_folio.folio_sets` (translated variants
-included), scope `all` every dataset. A selected folio is pulled when its revision changes;
+included), scope `all` every dataset, scope `app` the entries returned by the app's service
+implementing `Survos\DatasetBundle\Harvest\HarvestSelection` (called once per sync, so a
+selection kept in the app's database is read fresh). The interface lives in this bundle, so the
+app aliases it: `Survos\DatasetBundle\Harvest\HarvestSelection: '@App\Harvest\MySelection'`. A selected folio is pulled when its revision changes;
 with `survos_folio.local_passthrough`, or when Harvest publishes no archive, the file already on
 disk is the answer. When folios or set membership change, the sync runs `folio:sets:sync`.
 
-App-specific work listens to `Survos\DatasetBundle\Event\HarvestSyncedEvent` (entries, receipts,
-`changed`). It is dispatched before the checkpoint is saved: a listener that throws leaves the
+App-specific work listens to `Survos\DatasetBundle\Event\HarvestSyncedEvent`: every catalog entry,
+the receipts held now and at the last success, and `changed`; `held($entry)` and
+`revised($entry)` answer per entry. It is dispatched before the checkpoint is saved: a listener that throws leaves the
 checkpoint unchanged and the next run retries.
 
 The checkpoint is the `harvest_sync_checkpoint` table (`Harvest\Entity\HarvestSyncCheckpoint`),

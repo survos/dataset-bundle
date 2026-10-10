@@ -24,7 +24,8 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  *
  * folio-bundle owns the protocol (FolioCatalogClient::synchronize()) and acquiring one folio
  * (FolioPullCommand::pullEntry()). This owns the checkpoint, the lock and the selection:
- * scope "folio_sets" holds the members of survos_folio.folio_sets, scope "all" every dataset.
+ * scope "folio_sets" holds the members of survos_folio.folio_sets, scope "all" every dataset,
+ * scope "app" whatever the app's HarvestSelection returns.
  */
 final readonly class HarvestSync
 {
@@ -38,6 +39,7 @@ final readonly class HarvestSync
         private bool $localPassthrough,
         private ?FolioSetResolver $sets = null,
         private ?FolioSetsSyncCommand $recordSets = null,
+        private ?HarvestSelection $selection = null,
     ) {}
 
     #[AsCommand('harvest:sync', 'Synchronize this app\'s folios with Harvest; record the feed checkpoint on success')]
@@ -55,7 +57,8 @@ final readonly class HarvestSync
                     // Resolved against the catalog being applied, not the one on disk.
                     $membership = $this->membership();
                     $wanted = $membership === null ? null : self::wanted($membership);
-                    foreach (self::select($entries, $wanted, $previous) as [$entry, $changed]) {
+                    $candidates = $this->scope === 'app' ? $this->appSelection()->select($entries) : $entries;
+                    foreach (self::select($candidates, $wanted, $previous) as [$entry, $changed]) {
                         if ($this->acquire($io, $entry, $changed)) {
                             $receipts[self::receiptKey($entry)] = $entry->revision;
                         }
@@ -67,7 +70,7 @@ final readonly class HarvestSync
                     if (!$changed) {
                         $io->text('No folio or membership changes.');
                     }
-                    $this->events->dispatch(new HarvestSyncedEvent($io, $entries, $receipts, $changed));
+                    $this->events->dispatch(new HarvestSyncedEvent($io, $entries, $receipts, $changed, $previous));
                 });
                 $result[Field::RECEIPTS] = $receipts;
                 $this->state->save($result);
@@ -139,6 +142,11 @@ final readonly class HarvestSync
     public static function receiptKey(FolioCatalogEntry $entry): string
     {
         return $entry->locale === null ? $entry->datasetKey : $entry->datasetKey.'#'.$entry->locale;
+    }
+
+    private function appSelection(): HarvestSelection
+    {
+        return $this->selection ?? throw new \LogicException('survos_dataset.harvest_sync scope "app" needs a service implementing '.HarvestSelection::class.'.');
     }
 
     /** Whether the entry's folio is present at its published revision once this returns. */
