@@ -1,3 +1,11 @@
+> **Deprecated.** This bundle's source now lives in Harvest (`survos-sites/harvest`,
+> `bu/dataset-bundle`), the only app that uses it, under the same `Survos\DatasetBundle`
+> namespace. This copy is frozen and will not receive changes.
+>
+> - Need only dataset paths under `APP_DATA_DIR`? Use `Survos\DataContracts\Path\DataPaths`
+>   from `survos/data-contracts` and wire `$dataDir: '%env(APP_DATA_DIR)%'`.
+> - Reading Harvest's folios or catalog from another app? Use `survos/harvest-bundle`.
+
 # Survos Data Bundle
 
 `survos/data-bundle` centralizes dataset filesystem conventions for

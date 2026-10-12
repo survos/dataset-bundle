@@ -1,6 +1,7 @@
 {
     "name": "survos/dataset-bundle",
-    "description": "Shared data directory conventions and path utilities for dataset-driven apps (APP_DATA_DIR).",
+    "description": "DEPRECATED: moved into survos-sites/harvest (bu/dataset-bundle), its only user. Paths: survos/data-contracts. Consumers: survos/harvest-bundle.",
+    "abandoned": "survos/harvest-bundle",
     "type": "symfony-bundle",
     "license": "MIT",
     "autoload": {

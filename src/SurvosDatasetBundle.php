@@ -53,9 +53,6 @@ final class SurvosDatasetBundle extends AbstractBundle
 {
     use HasConfigurableRoutes;
 
-    /** Where every consuming app finds Harvest unless HARVEST_SERVER says otherwise. */
-    public const HARVEST_SERVER = 'https://harvest.survos.com';
-
 
     public function configure(DefinitionConfigurator $definition): void
     {
@@ -255,14 +252,10 @@ final class SurvosDatasetBundle extends AbstractBundle
         // Scopes Artifact's /folio-archives collection to type=folio_archive -- see the class
         // docblock. autoconfigure() picks up API Platform's own registerForAutoconfiguration()
         // tag for QueryCollectionExtensionInterface, no explicit tag needed here.
-        // Implements an API Platform interface: an app without API Platform (a reading app such as
-        // rutado) cannot load the class, and registering it anyway breaks its container.
-        if (interface_exists(\ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface::class)) {
-            $services->set(\Survos\DatasetBundle\Doctrine\FolioArchiveTypeExtension::class)
-                ->autowire()
-                ->autoconfigure()
-                ->public();
-        }
+        $services->set(\Survos\DatasetBundle\Doctrine\FolioArchiveTypeExtension::class)
+            ->autowire()
+            ->autoconfigure()
+            ->public();
 
         if (class_exists(\Survos\ImportBundle\Event\ImportConvertFinishedEvent::class)) {
             $services->set(DatasetRegistryImportConvertListener::class)
@@ -367,32 +360,6 @@ final class SurvosDatasetBundle extends AbstractBundle
         $entityDir = dirname(__DIR__) . '/src/Entity';
         $templateDir = dirname(__DIR__) . '/templates';
 
-        $harvestSync = false;
-        foreach ($builder->getExtensionConfig('survos_dataset') as $extensionConfig) {
-            $value = $extensionConfig['harvest_sync'] ?? null;
-            if ($value === true || (is_array($value) && ($value['enabled'] ?? true))) {
-                $harvestSync = true;
-            }
-        }
-
-        // A consuming app reads folios from Harvest without naming it. `default:` falls back when
-        // HARVEST_SERVER is missing OR empty (an .env line `HARVEST_SERVER=` counts as unset); a
-        // plain env(HARVEST_SERVER) parameter would only cover a missing one. Prepended, so an
-        // app's own survos_folio.yaml still wins.
-        $builder->setParameter('survos_dataset.harvest_server', self::HARVEST_SERVER);
-        $builder->setParameter('survos_dataset.harvest_read_token', '');
-        if ($harvestSync && $builder->hasExtension('survos_folio')) {
-            $server = '%env(default:survos_dataset.harvest_server:HARVEST_SERVER)%';
-            $builder->prependExtensionConfig('survos_folio', [
-                'folio_server' => $server,
-                'dataset_api' => [
-                    'enabled' => true,
-                    'server' => $server,
-                    'token' => '%env(default:survos_dataset.harvest_read_token:HARVEST_READ_TOKEN)%',
-                ],
-            ]);
-        }
-
         if ($builder->hasExtension('doctrine')) {
             // This bundle adds a SECOND Doctrine connection ('dataset', pdo_sqlite) and
             // entity manager. Once a second connection exists, Doctrine no longer infers
@@ -464,6 +431,13 @@ final class SurvosDatasetBundle extends AbstractBundle
 
             // The Harvest checkpoint lives in the app's own database, like Str/Tr: mapped into the
             // default entity manager, its table created by the app's migration.
+            $harvestSync = false;
+            foreach ($builder->getExtensionConfig('survos_dataset') as $extensionConfig) {
+                $value = $extensionConfig['harvest_sync'] ?? null;
+                if ($value === true || (is_array($value) && ($value['enabled'] ?? true))) {
+                    $harvestSync = true;
+                }
+            }
             if ($harvestSync) {
                 $defaultEm = 'default';
                 foreach ($builder->getExtensionConfig('doctrine') as $doctrineConfig) {
